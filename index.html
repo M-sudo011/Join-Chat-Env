@@ -245,6 +245,45 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 }
 #join-chat .camera-shutter span { width: 24px; height: 24px; border: 2px solid currentColor; border-radius: 50%; }
 #join-chat .camera-fallback { min-height: 44px; margin-inline-start: 8px; text-decoration: underline; }
+#join-chat .birthdate-trigger { margin-top: 4px; }
+#join-chat .birth-picker { width: min(420px, calc(100% - 24px)); padding: 12px 16px 16px; overflow: auto; }
+#join-chat .birth-picker .sheet-heading h2 { font-size: 18px; }
+#join-chat .birth-wheels {
+  --date-row: 48px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 24px 10px 20px;
+}
+#join-chat .birth-lane { position: relative; min-width: 0; }
+#join-chat .birth-lane::after {
+  content: '';
+  position: absolute;
+  inset: var(--date-row) 0;
+  border-block: 1px solid light-dark(#d8ded9, #566359);
+  pointer-events: none;
+}
+#join-chat .birth-wheel {
+  height: calc(3 * var(--date-row));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+}
+#join-chat .birth-wheel::-webkit-scrollbar { display: none; }
+#join-chat .birth-wheel::before, #join-chat .birth-wheel::after { content: ''; display: block; height: var(--date-row); }
+#join-chat .birth-option {
+  display: grid;
+  place-items: center;
+  height: var(--date-row);
+  scroll-snap-align: center;
+  color: light-dark(#67716a, #a9b5ad);
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+#join-chat .birth-option[data-selected] { color: inherit; font-size: 16px; font-weight: 600; }
+#join-chat .birth-confirm { width: 100%; border-radius: 30px; background: #176fbd; color: #fff; }
 @media (min-width: 520px) and (min-height: 690px) {
   #join-chat { padding: 22px 12px; }
   #join-chat .device { height: min(820px, calc(100dvh - 44px)); box-shadow: 0 16px 50px #0002; }
@@ -309,6 +348,18 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
       <button class="tool camera-fallback" type="button" data-camera-fallback hidden>دوربین گوشی</button>
     </footer>
   </dialog>
+  <dialog class="sheet birth-picker" id="birthdate-picker" aria-labelledby="birthdate-title">
+    <div class="sheet-heading">
+      <h2 id="birthdate-title">انتخاب تاریخ تولد</h2>
+      <form method="dialog"><button class="tool" type="submit" aria-label="بستن">✕</button></form>
+    </div>
+    <div class="birth-wheels">
+      <div class="birth-lane"><div class="birth-wheel" role="spinbutton" tabindex="0" data-part="day" aria-label="روز"></div></div>
+      <div class="birth-lane"><div class="birth-wheel" role="spinbutton" tabindex="0" data-part="month" aria-label="ماه"></div></div>
+      <div class="birth-lane"><div class="birth-wheel" role="spinbutton" tabindex="0" data-part="year" aria-label="سال"></div></div>
+    </div>
+    <button class="send birth-confirm" type="button" data-birthdate-confirm>تأیید</button>
+  </dialog>
 </main>
 <script>
 (() => {
@@ -327,6 +378,16 @@ const cameraVideo = cameraView.querySelector('video');
 const cameraStatus = cameraView.querySelector('.camera-status');
 const cameraCapture = cameraSheet.querySelector('[data-camera-capture]');
 const cameraFallback = cameraSheet.querySelector('[data-camera-fallback]');
+const birthPicker = app.querySelector('#birthdate-picker');
+const birthWheels = [...birthPicker.querySelectorAll('.birth-wheel')];
+const birthdateLabel = 'تاریخ تولد';
+const birthYearMin = 1300;
+const persianMonths = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+const persianCalendar = new Intl.DateTimeFormat('en-US', {
+  calendar: 'persian', numberingSystem: 'latn', timeZone: 'Asia/Tehran', year: 'numeric', month: 'numeric', day: 'numeric',
+});
+let birthToday;
+let birthDraft;
 let cameraSession = 0;
 let cameraStream = null;
 const tasks = {
@@ -363,7 +424,7 @@ const documentTypes = {
   car: { card: 'کارت خودرو', green: 'برگ سبز' },
 };
 const sampleDetails = {
-  license: { 'نام و نام خانوادگی': 'علی نمونه', 'تاریخ تولد': '۱۳۶۹/۰۱/۰۱' },
+  license: { 'نام و نام خانوادگی': 'علی نمونه', [birthdateLabel]: '۱۳۶۹/۰۱/۰۱' },
   car: {
     'پلاک': '۱۲ ب ۳۴۵ ایران ۶۷', 'نوع خودرو': 'پژو ۲۰۶', 'مدل': '۱۳۹۸',
     'رنگ': 'سفید', 'شماره شاسی': 'SAMPLE-VIN', 'نام مالک': 'علی نمونه', 'کد ملی مالک': '۰۰۰۰۰۰۰۰۰۰',
@@ -873,12 +934,146 @@ function acceptPhoto() {
   }
 }
 
+function persianDateParts(date) {
+  const parts = Object.fromEntries(persianCalendar.formatToParts(date).map(part => [part.type, Number(part.value)]));
+  return { year: parts.year, month: parts.month, day: parts.day };
+}
+
+function lastBirthMonth(year) {
+  return year === birthToday.year ? birthToday.month : 12;
+}
+
+function lastBirthDay(year, month) {
+  if (year === birthToday.year && month === birthToday.month) return birthToday.day;
+  if (month <= 6) return 31;
+  if (month < 12) return 30;
+
+  // Find Esfand 30 around the Gregorian March boundary using the same Persian calendar as the picker.
+  for (let day = 18; day <= 23; day++) {
+    const parts = persianDateParts(new Date(Date.UTC(year + 622, 2, day, 12)));
+    if (parts.year === year && parts.month === 12 && parts.day === 30) return 30;
+  }
+  return 29;
+}
+
+function parseBirthdate(value) {
+  const digits = value.replace(/[۰-۹]/g, digit => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
+    .replace(/[٠-٩]/g, digit => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit));
+  if (!/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(digits)) return null;
+  const [year, month, day] = digits.split('/').map(Number);
+  if (year < birthYearMin || year > birthToday.year || month < 1 || month > lastBirthMonth(year)) return null;
+  if (day < 1 || day > lastBirthDay(year, month)) return null;
+  return { year, month, day };
+}
+
+function dateDigits(value, minLength = 1) {
+  return String(value).padStart(minLength, '0').replace(/\d/g, digit => '۰۱۲۳۴۵۶۷۸۹'[digit]);
+}
+
+function birthWheelLimits(part) {
+  if (part === 'year') return [birthYearMin, birthToday.year];
+  if (part === 'month') return [1, lastBirthMonth(birthDraft.year)];
+  return [1, lastBirthDay(birthDraft.year, birthDraft.month)];
+}
+
+function birthWheelLabel(part, value) {
+  return part === 'month' ? persianMonths[value - 1] : dateDigits(value);
+}
+
+function renderBirthWheel(wheel, align) {
+  const part = wheel.dataset.part;
+  const [min, max] = birthWheelLimits(part);
+  const descending = part === 'year';
+  const range = min + '-' + max;
+  if (wheel.dataset.range !== range) {
+    wheel.dataset.range = range;
+    wheel.innerHTML = Array.from({ length: max - min + 1 }, (_, index) => {
+      const value = descending ? max - index : min + index;
+      return '<div class="birth-option" data-value="' + value + '" aria-hidden="true">' + birthWheelLabel(part, value) + '</div>';
+    }).join('');
+    align = true;
+  }
+  const value = birthDraft[part];
+  const index = descending ? max - value : value - min;
+  wheel.querySelector('[data-selected]')?.removeAttribute('data-selected');
+  wheel.children[index].setAttribute('data-selected', '');
+  wheel.setAttribute('aria-valuemin', min);
+  wheel.setAttribute('aria-valuemax', max);
+  wheel.setAttribute('aria-valuenow', value);
+  wheel.setAttribute('aria-valuetext', birthWheelLabel(part, value));
+  if (align) wheel.scrollTop = index * wheel.firstElementChild.offsetHeight;
+}
+
+function selectBirthPart(wheel, value, align = true) {
+  const part = wheel.dataset.part;
+  if (!align && birthDraft[part] === value) return;
+  const [min, max] = birthWheelLimits(part);
+  const previousMonth = birthDraft.month;
+  const previousDay = birthDraft.day;
+  birthDraft[part] = Math.max(min, Math.min(max, value));
+  birthDraft.month = Math.min(birthDraft.month, lastBirthMonth(birthDraft.year));
+  birthDraft.day = Math.min(birthDraft.day, lastBirthDay(birthDraft.year, birthDraft.month));
+  for (const item of birthWheels) {
+    const other = item.dataset.part;
+    if (item === wheel) renderBirthWheel(item, align);
+    else if (other === 'month' && part === 'year') renderBirthWheel(item, previousMonth !== birthDraft.month);
+    else if (other === 'day' && part !== 'day') renderBirthWheel(item, previousDay !== birthDraft.day);
+  }
+}
+
+function openBirthPicker() {
+  birthToday = persianDateParts(new Date());
+  const value = composer.querySelector('#birthdate-value').value;
+  birthDraft = parseBirthdate(value) || { year: Math.max(birthYearMin, birthToday.year - 30), month: 1, day: 1 };
+  birthPicker.showModal();
+  birthWheels.forEach(wheel => renderBirthWheel(wheel, true));
+}
+
+birthWheels.forEach(wheel => {
+  wheel.addEventListener('scroll', () => {
+    const rowHeight = wheel.firstElementChild?.offsetHeight;
+    if (!birthPicker.open || !rowHeight) return;
+    const index = Math.round(wheel.scrollTop / rowHeight);
+    const option = wheel.children[index];
+    if (option) selectBirthPart(wheel, Number(option.dataset.value), false);
+  });
+  wheel.addEventListener('click', event => {
+    const option = event.target.closest('[data-value]');
+    if (option) selectBirthPart(wheel, Number(option.dataset.value));
+  });
+  wheel.addEventListener('keydown', event => {
+    const value = birthDraft[wheel.dataset.part];
+    const [min, max] = birthWheelLimits(wheel.dataset.part);
+    const choices = { ArrowUp: value + 1, ArrowDown: value - 1, PageUp: value + 10, PageDown: value - 10, Home: min, End: max };
+    if (!Object.hasOwn(choices, event.key)) return;
+    event.preventDefault();
+    selectBirthPart(wheel, choices[event.key]);
+  });
+});
+
+birthPicker.querySelector('[data-birthdate-confirm]').addEventListener('click', () => {
+  const { year, month, day } = birthDraft;
+  const value = [dateDigits(year), dateDigits(month, 2), dateDigits(day, 2)].join('/');
+  composer.querySelector('#birthdate-value').value = value;
+  composer.querySelector('[data-birthdate-display]').textContent = value;
+  birthPicker.close();
+});
+
 function renderReview() {
   const details = documents[task].details || sampleDetails[task];
-  const inputs = Object.entries(details).map(([label, value]) =>
-    '<label>' + escape(label) + '<input required value="' + escape(value) + '"></label>');
+  const inputs = Object.entries(details).map(([label, value]) => {
+    if (label === birthdateLabel) {
+      return '<div><label for="birthdate-trigger">' + birthdateLabel + '</label>' +
+        '<button class="option birthdate-trigger" id="birthdate-trigger" type="button" aria-haspopup="dialog" aria-controls="birthdate-picker">' +
+        '<span data-birthdate-display>' + escape(value || 'انتخاب تاریخ تولد') + '</span><span aria-hidden="true">⌄</span></button>' +
+        '<input type="hidden" id="birthdate-value" value="' + escape(value) + '"></div>';
+    }
+    return '<label>' + escape(label) + '<input required value="' + escape(value) + '"></label>';
+  });
   composer.innerHTML = '<div class="composer-title">بررسی اطلاعات مدرک</div><form><div class="review-grid">' +
     inputs.join('') + '</div><button class="send review-action" type="submit">تأیید اطلاعات</button></form>' + controls();
+  const birthTrigger = composer.querySelector('#birthdate-trigger');
+  if (birthTrigger) birthTrigger.onclick = openBirthPicker;
   composer.querySelector('form').onsubmit = event => {
     event.preventDefault();
     const values = [...event.currentTarget.querySelectorAll('input')].map(input => input.value.trim());
