@@ -16,6 +16,24 @@
 #join-chat .history{display:flex;flex-direction:column;gap:15px;padding:23px 15px 24px;min-height:300px;justify-content:flex-end}
 #join-chat .message{max-width:88%;padding:12px 14px;font-size:13px;line-height:1.95;overflow-wrap:anywhere;white-space:pre-wrap}
 #join-chat .assistant{align-self:flex-end;background:light-dark(#f0f1ef,#303534);border-radius:15px 15px 15px 4px}
+#join-chat .typing { display: flex; direction: ltr; align-items: center; gap: 5px; min-height: 43px; }
+#join-chat .typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: light-dark(#637066, #b6c9ba);
+  animation: typing-dot 900ms ease-in-out infinite;
+}
+#join-chat .typing span:nth-child(2) { animation-delay: 120ms; }
+#join-chat .typing span:nth-child(3) { animation-delay: 240ms; }
+#join-chat .composer[inert] > * { visibility: hidden; }
+@keyframes typing-dot {
+  0%, 65%, 100% { opacity: .45; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #join-chat .typing span { animation: none; }
+}
 #join-chat .driver{align-self:flex-start;background:light-dark(#dff3e3,#284a35);border-radius:15px 15px 4px 15px}
 #join-chat .bubble-photo{display:block;width:100%;max-height:160px;object-fit:contain;border-radius:8px;margin-top:8px}
 #join-chat .editor{display:block;text-align:left;margin-top:5px}
@@ -117,6 +135,8 @@ let previousMode = 'tasks';
 let editing = false;
 let pendingPhoto = null;
 let submitted = false;
+const botQueue = [];
+let isBotTyping = false;
 
 const escape = value => String(value).replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -152,7 +172,41 @@ function addMessage(who, text, options = {}) {
   history.scrollTop = history.scrollHeight;
 }
 
-const bot = (text, options) => addMessage('assistant', text, options);
+function bot(text, options) {
+  botQueue.push({ text, options });
+  if (isBotTyping) return;
+  isBotTyping = true;
+  composer.inert = true;
+  history.querySelectorAll('button.editor').forEach(button => { button.disabled = true; });
+  showNextBotMessage();
+}
+
+function showNextBotMessage() {
+  const message = botQueue.shift();
+  if (!message) {
+    isBotTyping = false;
+    composer.inert = false;
+    history.querySelectorAll('button.editor').forEach(button => { button.disabled = false; });
+    render();
+    return;
+  }
+
+  const typing = document.createElement('div');
+  typing.className = 'message assistant typing';
+  typing.setAttribute('role', 'status');
+  typing.setAttribute('aria-label', 'تپسی در حال نوشتن است');
+  typing.innerHTML = '<span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>';
+  history.append(typing);
+  history.scrollTop = history.scrollHeight;
+
+  const delay = Math.min(950, 420 + message.text.length * 4);
+  setTimeout(() => {
+    typing.remove();
+    addMessage('assistant', message.text, message.options);
+    showNextBotMessage();
+  }, delay);
+}
+
 const driver = (text, options) => addMessage('driver', text, options);
 const persian = value => Number(value).toLocaleString('fa-IR');
 
@@ -202,6 +256,7 @@ function inputForField() {
 function render() {
   const complete = Object.keys(tasks).filter(isComplete).length;
   progress.textContent = 'نسخه آزمایشی · ' + persian(complete) + ' از ۴ بخش تکمیل شده';
+  if (isBotTyping) return;
   if (mode === 'tasks') {
     const taskButtons = Object.entries(tasks).map(([key, [label]]) => option(label, 'task:' + key, taskStatus(key)));
     if (complete === 4 && !submitted) taskButtons.push(option('ارسال آزمایشی برای بررسی', 'submit'));
