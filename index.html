@@ -77,7 +77,21 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 #join-chat .upload { flex-wrap: wrap; }
 #join-chat .upload .option { width: auto; }
 #join-chat .city-trigger { flex: 1; min-width: 0; }
-#join-chat .city-picker {
+#join-chat .progress-trigger {
+  flex: none;
+  display: grid;
+  gap: 3px;
+  min-height: 44px;
+  margin-inline-start: auto;
+  padding: 6px 9px;
+  border: 1px solid light-dark(#dce1db, #4b564c);
+  border-radius: 8px;
+  background: transparent;
+  text-align: start;
+  font-size: 12px;
+}
+#join-chat .progress-trigger .sub { margin: 0; }
+#join-chat .sheet {
   width: min(460px, calc(100% - 24px));
   max-height: min(680px, calc(100dvh - 24px));
   padding: 0;
@@ -87,14 +101,34 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
   color: inherit;
   overflow: hidden;
 }
-#join-chat .city-picker[open] { display: flex; flex-direction: column; }
-#join-chat .city-picker::backdrop { background: rgb(0 0 0 / 45%); }
-#join-chat .city-picker-header { flex: none; padding: 12px 16px; border-bottom: 1px solid light-dark(#e6e9e5, #3f4542); }
-#join-chat .city-picker-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-#join-chat .city-picker-heading h2 { margin: 0; font-size: 16px; }
-#join-chat .city-picker-heading form { margin: 0; }
+#join-chat .sheet[open] { display: flex; flex-direction: column; }
+#join-chat .sheet::backdrop { background: rgb(0 0 0 / 45%); }
+#join-chat .sheet-header { flex: none; padding: 12px 16px; border-bottom: 1px solid light-dark(#e6e9e5, #3f4542); }
+#join-chat .sheet-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+#join-chat .sheet-heading h2 { margin: 0; font-size: 16px; }
+#join-chat .sheet-heading form { margin: 0; }
 #join-chat .city-picker .city-search { padding-inline: 12px; }
-#join-chat .city-results { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 12px; }
+#join-chat .sheet-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 12px; }
+#join-chat .progress-section { border-bottom: 1px solid light-dark(#e6e9e5, #3f4542); }
+#join-chat .progress-section summary { padding: 15px 0; cursor: pointer; font-size: 14px; }
+#join-chat .progress-section summary .option-status { float: inline-end; margin-inline-start: 6px; }
+#join-chat .progress-steps { list-style: none; margin: 0; padding: 0; }
+#join-chat .progress-step {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  text-align: start;
+  font-size: 13px;
+}
+#join-chat button.progress-step { cursor: pointer; }
+#join-chat .progress-step [data-filled] { color: light-dark(#246344, #a8ddb7); }
+#join-chat .progress-resume { margin: 6px 0 12px; }
 #join-chat .city-result {
   display: block;
   width: 100%;
@@ -114,7 +148,7 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 }
 @media (max-width: 519px) {
   #join-chat .device { max-width: none; border: 0; border-radius: 0; }
-  #join-chat .city-picker { width: 100%; max-width: none; margin: auto 0 0; border-radius: 16px 16px 0 0; }
+  #join-chat .sheet { width: 100%; max-width: none; margin: auto 0 0; border-radius: 16px 16px 0 0; }
 }
 </style>
 </head>
@@ -123,20 +157,33 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
   <section class="device" aria-label="گفت‌وگوی ثبت‌نام راننده">
     <header class="app-header">
       <span class="mark" aria-hidden="true">ت</span>
-      <div><div class="heading">همراه ثبت‌نام تپسی</div><div class="sub" data-progress></div></div>
+      <div><div class="heading">همراه ثبت‌نام تپسی</div><div class="sub">نسخه آزمایشی</div></div>
+      <button class="progress-trigger" type="button" aria-haspopup="dialog" aria-controls="registration-progress">
+        <span>پیشرفت ثبت‌نام</span><span class="sub" data-progress></span>
+      </button>
     </header>
     <div class="history" role="log" aria-label="پیام‌های گفت‌وگو"></div>
     <div class="composer" aria-label="پاسخ به پیام"></div>
   </section>
-  <dialog class="city-picker" aria-labelledby="city-picker-title">
-    <div class="city-picker-header">
-      <div class="city-picker-heading">
+  <dialog class="sheet city-picker" aria-labelledby="city-picker-title">
+    <div class="sheet-header">
+      <div class="sheet-heading">
         <h2 id="city-picker-title">شهر محل فعالیت</h2>
         <form method="dialog"><button class="tool" type="submit">بستن</button></form>
       </div>
       <input class="city-search" type="search" aria-label="جست‌وجوی شهر یا محدوده" placeholder="نام شهر یا محدوده رو جست‌وجو کن" autocomplete="off" autofocus>
     </div>
-    <div class="city-results" aria-label="شهرها و محدوده‌های فعالیت"></div>
+    <div class="sheet-body city-results" aria-label="شهرها و محدوده‌های فعالیت"></div>
+  </dialog>
+  <dialog class="sheet progress-sheet" id="registration-progress" aria-labelledby="progress-title">
+    <div class="sheet-header">
+      <div class="sheet-heading">
+        <h2 id="progress-title">پیشرفت ثبت‌نام</h2>
+        <form method="dialog"><button class="tool" type="submit" autofocus>بستن</button></form>
+      </div>
+      <div class="sub" data-progress-summary></div>
+    </div>
+    <div class="sheet-body" data-progress-sections></div>
   </dialog>
 </main>
 <script>
@@ -145,6 +192,8 @@ const app = document.querySelector('#join-chat');
 const history = app.querySelector('.history');
 const composer = app.querySelector('.composer');
 const progress = app.querySelector('[data-progress]');
+const progressSheet = app.querySelector('#registration-progress');
+const progressSections = progressSheet.querySelector('[data-progress-sections]');
 const cityPicker = app.querySelector('.city-picker');
 const citySearch = cityPicker.querySelector('.city-search');
 const cityResults = cityPicker.querySelector('.city-results');
@@ -278,6 +327,68 @@ function taskStatus(key) {
   return Object.keys(documents[key].images).length ? 'در حال تکمیل' : '';
 }
 
+function progressSteps(key) {
+  if (key === 'personal') {
+    return fields.map(item => ({ label: item.label, filled: Boolean(answers[item.key]), action: 'field:' + item.key }));
+  }
+  const { images, type, details } = documents[key];
+  if (key === 'live') return [{ label: 'عکس زنده چهره', filled: Boolean(images.face) }];
+
+  const photoSteps = type
+    ? imageKeys(key).map(side => ({ label: imageLabel(key, side), filled: Boolean(images[side]) }))
+    : [{ label: 'تصویر مدرک', filled: false }];
+  return [{ label: 'انتخاب نوع مدرک', filled: Boolean(type) }, ...photoSteps,
+    { label: 'تأیید اطلاعات مدرک', filled: Boolean(details) }];
+}
+
+function openProgress() {
+  const keys = Object.keys(tasks);
+  const complete = keys.filter(isComplete).length;
+  const expanded = task || keys.find(key => !isComplete(key));
+  progressSheet.querySelector('[data-progress-summary]').textContent = persian(complete) + ' از ۴ بخش تکمیل شده';
+  progressSections.innerHTML = keys.map(key => {
+    const steps = progressSteps(key);
+    const done = isComplete(key);
+    let status = 'شروع نشده';
+    if (done) status = 'تکمیل شده';
+    else if (steps.some(step => step.filled)) status = 'در حال تکمیل';
+
+    const rows = steps.map(({ label, filled, action }) => {
+      const content = '<span>' + escape(label) + '</span><span class="option-status"' +
+        (filled ? ' data-filled>ثبت شده ✓' : '>باقی مانده') + '</span>';
+      if (!action) return '<li class="progress-step">' + content + '</li>';
+      return '<li><button type="button" class="progress-step" data-action="' + action + '">' + content + '</button></li>';
+    }).join('');
+
+    let resume = '';
+    if (key !== 'personal' && !(key === 'live' && done)) {
+      resume = '<button type="button" class="option progress-resume" data-action="task:' + key + '">' +
+        (done ? 'مرور اطلاعات' : 'ادامه این بخش') + '</button>';
+    }
+    return '<details class="progress-section" name="registration-sections"' + (key === expanded ? ' open' : '') +
+      '><summary>' + escape(titles(key)) + ' <span class="option-status">' + status + '</span></summary>' +
+      '<ul class="progress-steps">' + rows + '</ul>' + resume + '</details>';
+  }).join('');
+  syncProgressActions();
+  progressSections.scrollTop = 0;
+  progressSheet.showModal();
+}
+
+function syncProgressActions() {
+  progressSections.querySelectorAll('button[data-action]').forEach(button => { button.disabled = isBotTyping; });
+}
+
+app.querySelector('.progress-trigger').addEventListener('click', openProgress);
+progressSections.addEventListener('click', event => {
+  const button = event.target.closest('button[data-action]');
+  if (!button || isBotTyping) return;
+  progressSheet.close();
+  const [command, key] = button.dataset.action.split(':');
+  if (command === 'field' && mode === 'field' && key === field.key) return;
+  if (command === 'task' && key === task && ['doctype', 'upload', 'photo', 'review'].includes(mode)) return;
+  handleAction(button.dataset.action);
+});
+
 function option(label, action, status = '') {
   return '<button class="option" type="button" data-action="' + action + '"><span>' +
     escape(label) + '</span><span class="option-status">' + escape(status) + '</span></button>';
@@ -369,7 +480,8 @@ function inputForField() {
 
 function render() {
   const complete = Object.keys(tasks).filter(isComplete).length;
-  progress.textContent = 'نسخه آزمایشی · ' + persian(complete) + ' از ۴ بخش تکمیل شده';
+  progress.textContent = persian(complete) + ' از ۴ بخش';
+  if (progressSheet.open) syncProgressActions();
   if (isBotTyping) return;
   if (mode === 'tasks') {
     const taskButtons = Object.entries(tasks).map(([key, [label]]) => option(label, 'task:' + key, taskStatus(key)));
@@ -459,19 +571,18 @@ function submitAnswer(event) {
   render();
 }
 
-function imageKeys() {
-  if (task === 'live') return ['face'];
-  return documents[task].type === 'card' ? ['front', 'back'] : ['single'];
+function imageKeys(key = task) {
+  if (key === 'live') return ['face'];
+  return documents[key].type === 'card' ? ['front', 'back'] : ['single'];
 }
 
-function nextImage() {
-  return imageKeys().find(key => !documents[task].images[key]);
+function nextImage(key = task) {
+  return imageKeys(key).find(side => !documents[key].images[side]);
 }
 
-function imageLabel() {
-  if (task === 'live') return 'عکس زنده چهره';
-  const label = documentTypes[task][documents[task].type];
-  const side = nextImage();
+function imageLabel(key = task, side = nextImage(key)) {
+  if (key === 'live') return 'عکس زنده چهره';
+  const label = documentTypes[key][documents[key].type];
   if (side === 'front') return 'روی ' + label;
   if (side === 'back') return 'پشت ' + label;
   return 'تصویر ' + label;
