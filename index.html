@@ -284,6 +284,35 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 }
 #join-chat .birth-option[data-selected] { color: inherit; font-size: 16px; font-weight: 600; }
 #join-chat .birth-confirm { width: 100%; border-radius: 30px; background: #176fbd; color: #fff; }
+#join-chat .car-review-sheet { height: min(780px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); }
+#join-chat .car-review-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+#join-chat .car-review-body { flex: 1; padding: 16px 18px 24px; }
+#join-chat .car-review-fields { display: grid; gap: 20px; }
+#join-chat .car-field { display: grid; gap: 8px; margin: 0; font-size: 14px; }
+#join-chat .car-field input, #join-chat .car-field select, #join-chat .car-plate input, #join-chat .car-plate select {
+  min-height: 50px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: light-dark(#e8ebea, #323c36);
+}
+#join-chat .car-field select:invalid { color: light-dark(#606a64, #b8c2bc); }
+#join-chat .car-plate-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+#join-chat .car-plate-heading label { margin: 0; font-size: 14px; }
+#join-chat .car-plate-heading select { width: auto; min-height: 38px; padding: 4px 8px; border: 0; border-radius: 18px; font-size: 13px; background: light-dark(#e8ebea, #323c36); }
+#join-chat .car-plate-set { min-width: 0; margin: 0; padding: 0; border: 0; }
+#join-chat .car-plate { display: grid; grid-template-columns: 34px repeat(4, minmax(0, 1fr)); gap: 6px; align-items: stretch; }
+#join-chat .car-plate input, #join-chat .car-plate select { height: 52px; padding: 3px; text-align: center; }
+#join-chat .car-plate-badge { display: grid; align-content: center; gap: 3px; padding: 4px; border-radius: 4px; background: #183d8e; color: #fff; font-size: 10px; line-height: 1.15; }
+#join-chat .car-plate-flag { width: 20px; height: 9px; border-radius: 1px; background: linear-gradient(#238644 0 33%, #fff 33% 66%, #d73737 66%); }
+#join-chat .car-plate-region { position: relative; }
+#join-chat .car-plate-region input { padding-bottom: 14px; }
+#join-chat .car-plate-region span { position: absolute; inset: auto 0 5px; text-align: center; font-size: 10px; color: light-dark(#53615a, #c2cdc5); pointer-events: none; }
+#join-chat .car-vin { direction: ltr; text-align: right; }
+#join-chat .car-owner { display: grid; gap: 14px; padding-top: 16px; border-top: 1px solid light-dark(#e1e6e2, #455048); }
+#join-chat .car-owner h3 { margin: 0; font-size: 14px; }
+#join-chat .car-review-footer { flex: none; padding: 10px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid light-dark(#e1e6e2, #455048); }
+#join-chat .car-review-footer .send { width: 100%; }
+#join-chat .car-review-footer .error:empty { display: none; }
 @media (min-width: 520px) and (min-height: 690px) {
   #join-chat { padding: 22px 12px; }
   #join-chat .device { height: min(820px, calc(100dvh - 44px)); box-shadow: 0 16px 50px #0002; }
@@ -292,6 +321,7 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
   #join-chat .device { max-width: none; border: 0; border-radius: 0; }
   #join-chat .sheet { width: 100%; max-width: none; margin: auto 0 0; border-radius: 16px 16px 0 0; }
   #join-chat .camera-sheet { height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+  #join-chat .car-review-sheet { height: 95dvh; max-height: 95dvh; }
 }
 </style>
 </head>
@@ -360,6 +390,22 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
     </div>
     <button class="send birth-confirm" type="button" data-birthdate-confirm>تأیید</button>
   </dialog>
+  <dialog class="sheet car-review-sheet" id="car-review" aria-labelledby="car-review-title">
+    <header class="sheet-header">
+      <div class="sheet-heading">
+        <h2 id="car-review-title">بررسی اطلاعات خودرو</h2>
+        <form method="dialog"><button class="tool" type="submit" autofocus>بستن</button></form>
+      </div>
+      <div class="sub">اطلاعات مدرک رو بررسی کن و موارد خالی رو کامل کن.</div>
+    </header>
+    <form class="car-review-form">
+      <div class="sheet-body car-review-body" data-car-fields></div>
+      <footer class="car-review-footer">
+        <button class="send" type="submit">تأیید اطلاعات خودرو</button>
+        <div class="error" role="alert" data-car-error></div>
+      </footer>
+    </form>
+  </dialog>
 </main>
 <script>
 (() => {
@@ -380,6 +426,11 @@ const cameraCapture = cameraSheet.querySelector('[data-camera-capture]');
 const cameraFallback = cameraSheet.querySelector('[data-camera-fallback]');
 const birthPicker = app.querySelector('#birthdate-picker');
 const birthWheels = [...birthPicker.querySelectorAll('.birth-wheel')];
+const carReview = app.querySelector('#car-review');
+const carReviewForm = carReview.querySelector('.car-review-form');
+const carReviewFields = carReview.querySelector('[data-car-fields]');
+let carReviewSource;
+let openCarReviewAfterReply = false;
 const birthdateLabel = 'تاریخ تولد';
 const birthYearMin = 1300;
 const persianMonths = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
@@ -426,8 +477,8 @@ const documentTypes = {
 const sampleDetails = {
   license: { 'نام و نام خانوادگی': 'علی نمونه', [birthdateLabel]: '۱۳۶۹/۰۱/۰۱' },
   car: {
-    'پلاک': '۱۲ ب ۳۴۵ ایران ۶۷', 'نوع خودرو': 'پژو ۲۰۶', 'مدل': '۱۳۹۸',
-    'رنگ': 'سفید', 'شماره شاسی': 'SAMPLE-VIN', 'نام مالک': 'علی نمونه', 'کد ملی مالک': '۰۰۰۰۰۰۰۰۰۰',
+    'پلاک': '۱۲ ب ۳۴۵ ایران ۶۷', 'نوع خودرو': 'پژو ۲۰۷', 'مدل': '',
+    'رنگ': '', 'شماره شاسی': 'DEMA207A8PJ012345', 'نام مالک': 'علی نمونه', 'کد ملی مالک': '۰۰۰۰۰۰۰۰۰۰',
   },
 };
 const answers = {};
@@ -748,6 +799,10 @@ function render() {
     button.onclick = () => handleAction(button.dataset.action);
   });
   history.scrollTop = history.scrollHeight;
+  if (openCarReviewAfterReply && task === 'car' && mode === 'review') {
+    openCarReviewAfterReply = false;
+    openCarReview();
+  }
 }
 
 function askField(item, edit = false) {
@@ -931,6 +986,7 @@ function acceptPhoto() {
   } else {
     bot('تصویرها دریافت شد. اطلاعات نمونه رو بررسی کن و اگه لازم بود تغییر بده.');
     mode = 'review';
+    if (task === 'car') openCarReviewAfterReply = true;
   }
 }
 
@@ -1059,7 +1115,119 @@ birthPicker.querySelector('[data-birthdate-confirm]').addEventListener('click', 
   birthPicker.close();
 });
 
+const plateLetters = ['الف', 'ب', 'ج', 'د', 'س', 'ص', 'ط', 'ع', 'ق', 'ل', 'م', 'ن', 'و', 'ه', 'ی'];
+const carTypes = ['پژو ۲۰۷', 'پژو ۲۰۶', 'پژو پارس', 'سمند LX', 'دنا پلاس', 'تارا', 'تیبا', 'ساینا', 'کوییک', 'پراید ۱۳۱', 'رانا پلاس'];
+const carColors = ['سفید', 'مشکی', 'خاکستری', 'نقره‌ای', 'نوک‌مدادی', 'قرمز', 'آبی', 'سرمه‌ای', 'سبز', 'بژ', 'سایر'];
+
+function latinDigits(value) {
+  return value.replace(/[۰-۹]/g, digit => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
+    .replace(/[٠-٩]/g, digit => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit));
+}
+
+function carOptions(choices, current, placeholder) {
+  const values = current && !choices.includes(current) ? [current, ...choices] : choices;
+  return '<option value="">' + escape(placeholder) + '</option>' + values.map(value =>
+    '<option value="' + escape(value) + '"' + (value === current ? ' selected' : '') + '>' + escape(value) + '</option>'
+  ).join('');
+}
+
+function carSelect(label, name, choices, current) {
+  return '<label class="car-field">' + label + '<select name="' + name + '" required>' +
+    carOptions(choices, current, label) + '</select></label>';
+}
+
+function plateDigits(name, label, length, value = '') {
+  return '<input type="text" name="' + name + '" aria-label="' + label + '" inputmode="numeric" maxlength="' + length +
+    '" pattern="[0-9۰-۹٠-٩]{' + length + '}" autocomplete="off" required value="' + (value ? dateDigits(value) : '') + '">';
+}
+
+function buildCarReview(details) {
+  const rawPlate = (details['پلاک'] || '').trim();
+  const plate = latinDigits(rawPlate).match(/^(\d{2})\s*([^\d\s]+)\s*(\d{3})\s*(?:ایران\s*)?(\d{2})$/);
+  const [, first, letter, serial, region] = plate || [];
+  const isNational = Boolean(plate) || !rawPlate;
+  const currentYear = persianDateParts(new Date()).year;
+  const years = Array.from({ length: currentYear - 1349 }, (_, index) => dateDigits(currentYear - index));
+  carReviewFields.innerHTML = '<div class="car-review-fields">' +
+    '<section aria-label="شماره پلاک"><div class="car-plate-heading"><label for="car-plate-type">شماره پلاک</label>' +
+    '<select id="car-plate-type" name="plate-type" aria-label="نوع پلاک"><option value="national">پلاک ملی</option>' +
+    '<option value="other"' + (isNational ? '' : ' selected') + '>سایر</option></select></div>' +
+    '<fieldset class="car-plate-set" data-plate-national><div class="car-plate" dir="ltr">' +
+    '<div class="car-plate-badge" aria-hidden="true"><span class="car-plate-flag"></span><span>IR<br>IRAN</span></div>' +
+    plateDigits('plate-first', 'دو رقم اول پلاک', 2, first) +
+    '<select name="plate-letter" aria-label="حرف پلاک" dir="rtl" required>' + carOptions(plateLetters, letter, 'حرف') + '</select>' +
+    plateDigits('plate-serial', 'سه رقم میانی پلاک', 3, serial) +
+    '<div class="car-plate-region">' + plateDigits('plate-region', 'کد ایران پلاک', 2, region) + '<span aria-hidden="true">ایران</span></div>' +
+    '</div></fieldset><fieldset class="car-plate-set" data-plate-other><input name="plate-other" aria-label="شماره پلاک" required value="' +
+    escape(isNational ? '' : rawPlate) + '"></fieldset></section>' +
+    carSelect('سیستم و تیپ خودرو', 'vehicle', carTypes, details['نوع خودرو']) +
+    carSelect('مدل (سال تولید خودرو)', 'year', years, details['مدل']) +
+    carSelect('رنگ خودرو', 'color', carColors, details['رنگ']) +
+    '<label class="car-field">شماره VIN<input class="car-vin" name="vin" required autocapitalize="characters" spellcheck="false" value="' +
+    escape(details['شماره شاسی'] || '') + '"></label>' +
+    '<section class="car-owner"><h3>اطلاعات مالک</h3><label class="car-field">نام مالک<input name="owner" required value="' +
+    escape(details['نام مالک'] || '') + '"></label><label class="car-field">کد ملی مالک<input name="owner-id" inputmode="numeric" required value="' +
+    escape(details['کد ملی مالک'] || '') + '"></label></section></div>';
+  syncPlateType();
+}
+
+function syncPlateType() {
+  const isNational = carReviewForm.elements.namedItem('plate-type').value === 'national';
+  for (const [selector, visible] of [['[data-plate-national]', isNational], ['[data-plate-other]', !isNational]]) {
+    const group = carReviewFields.querySelector(selector);
+    group.hidden = !visible;
+    group.disabled = !visible;
+  }
+}
+
+function openCarReview() {
+  const details = documents.car.details || sampleDetails.car;
+  if (carReviewSource !== details) {
+    buildCarReview(details);
+    carReviewSource = details;
+  }
+  carReview.querySelector('[data-car-error]').textContent = '';
+  carReview.showModal();
+  carReviewFields.scrollTop = 0;
+}
+
+carReviewForm.addEventListener('change', event => {
+  if (event.target.name === 'plate-type') syncPlateType();
+});
+
+carReviewForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const data = new FormData(carReviewForm);
+  const value = key => String(data.get(key) || '').trim();
+  const plate = value('plate-type') === 'national'
+    ? [dateDigits(latinDigits(value('plate-first'))), value('plate-letter'), dateDigits(latinDigits(value('plate-serial'))),
+      'ایران', dateDigits(latinDigits(value('plate-region')))].join(' ')
+    : value('plate-other');
+  const details = {
+    'پلاک': plate, 'نوع خودرو': value('vehicle'), 'مدل': value('year'), 'رنگ': value('color'),
+    'شماره شاسی': latinDigits(value('vin')).toUpperCase(), 'نام مالک': value('owner'), 'کد ملی مالک': value('owner-id'),
+  };
+  if (Object.values(details).some(item => !item)) {
+    carReview.querySelector('[data-car-error]').textContent = 'لطفاً همه موارد رو کامل کن.';
+    return;
+  }
+  carReview.close();
+  finishReview('car', details);
+});
+
+function finishReview(key, details) {
+  documents[key].details = details;
+  driver('اطلاعات مدرک رو تأیید می‌کنم.');
+  bot(titles(key) + ' ثبت شد. کدوم بخش رو ادامه بدیم؟');
+  mode = 'done';
+  render();
+}
+
 function renderReview() {
+  if (task === 'car') {
+    composer.innerHTML = options('بررسی اطلاعات مدرک', option('بررسی اطلاعات خودرو', 'car-review')) + controls();
+    return;
+  }
   const details = documents[task].details || sampleDetails[task];
   const inputs = Object.entries(details).map(([label, value]) => {
     if (label === birthdateLabel) {
@@ -1078,11 +1246,7 @@ function renderReview() {
     event.preventDefault();
     const values = [...event.currentTarget.querySelectorAll('input')].map(input => input.value.trim());
     if (values.some(value => !value)) return;
-    documents[task].details = Object.fromEntries(Object.keys(details).map((label, index) => [label, values[index]]));
-    driver('اطلاعات مدرک رو تأیید می‌کنم.');
-    bot(titles(task) + ' ثبت شد. کدوم بخش رو ادامه بدیم؟');
-    mode = 'done';
-    render();
+    finishReview(task, Object.fromEntries(Object.keys(details).map((label, index) => [label, values[index]])));
   };
 }
 
@@ -1110,6 +1274,7 @@ function chooseTask(key) {
   } else {
     bot('تصویرهای قبلی اینجا هستن. اطلاعات مدرک رو بررسی کن.');
     mode = 'review';
+    if (task === 'car') openCarReviewAfterReply = true;
   }
 }
 
@@ -1129,6 +1294,7 @@ function handleAction(action) {
       break;
     case 'resume': mode = previousMode; break;
     case 'fields': mode = 'fields'; break;
+    case 'car-review': openCarReview(); return;
     case 'skip': {
       driver('این مورد بمونه برای بعد.');
       const index = fields.indexOf(field);
