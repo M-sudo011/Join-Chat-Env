@@ -6,8 +6,7 @@
 <meta name="robots" content="noindex">
 <title>همراه ثبت‌نام تپسی</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500&display=swap');
-#join-chat{padding:18px 8px;color-scheme:light dark;font-family:Vazirmatn,Tahoma,sans-serif}
+#join-chat{padding:18px 8px;color-scheme:light dark;font-family:Tahoma,Arial,sans-serif}
 #join-chat *{box-sizing:border-box}
 #join-chat .device{max-width:400px;margin:auto;overflow:hidden;border:1px solid light-dark(#ddd,#484848);border-radius:22px;background:light-dark(#fff,#191b1c);color:light-dark(#252726,#f0f0ed)}
 #join-chat .app-header{display:flex;gap:12px;align-items:center;padding:19px 18px;border-bottom:1px solid light-dark(#ededeb,#363a3b);background:light-dark(#fff,#202324)}
@@ -80,6 +79,7 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
   </section>
 </main>
 <script>
+(() => {
 const app = document.querySelector('#join-chat');
 const history = app.querySelector('.history');
 const composer = app.querySelector('.composer');
@@ -434,6 +434,7 @@ function handleAction(action) {
 bot('سلام! به ثبت‌نام رانندگان تپسی خوش اومدی. با هم اطلاعات و مدارکت رو ثبت می‌کنیم.');
 bot('این نسخه آزمایشیه. می‌تونی با اطلاعات و تصویر نمونه امتحانش کنی. دوست داری از کدوم بخش شروع کنیم؟');
 render();
+})();
 </script>
 </body>
 </html>
