@@ -76,12 +76,45 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 #join-chat .sample { border: 1px dashed currentColor; border-radius: 8px; padding: 6px 10px; margin-top: 6px; font-size: 12px; }
 #join-chat .upload { flex-wrap: wrap; }
 #join-chat .upload .option { width: auto; }
+#join-chat .city-trigger { flex: 1; min-width: 0; }
+#join-chat .city-picker {
+  width: min(460px, calc(100% - 24px));
+  max-height: min(680px, calc(100dvh - 24px));
+  padding: 0;
+  border: 1px solid light-dark(#dce1db, #4b564c);
+  border-radius: 16px;
+  background: light-dark(#fff, #202324);
+  color: inherit;
+  overflow: hidden;
+}
+#join-chat .city-picker[open] { display: flex; flex-direction: column; }
+#join-chat .city-picker::backdrop { background: rgb(0 0 0 / 45%); }
+#join-chat .city-picker-header { flex: none; padding: 12px 16px; border-bottom: 1px solid light-dark(#e6e9e5, #3f4542); }
+#join-chat .city-picker-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+#join-chat .city-picker-heading h2 { margin: 0; font-size: 16px; }
+#join-chat .city-picker-heading form { margin: 0; }
+#join-chat .city-picker .city-search { padding-inline: 12px; }
+#join-chat .city-results { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 12px; }
+#join-chat .city-result {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 1px solid light-dark(#e6e9e5, #3f4542);
+  background: transparent;
+  text-align: start;
+  font-size: 14px;
+}
+#join-chat .city-coverage, #join-chat .city-empty { color: light-dark(#515a53, #c4cec6); font-size: 12px; line-height: 1.8; }
+#join-chat .city-coverage { display: block; margin-top: 4px; }
 @media (min-width: 520px) and (min-height: 690px) {
   #join-chat { padding: 22px 12px; }
   #join-chat .device { height: min(820px, calc(100dvh - 44px)); box-shadow: 0 16px 50px #0002; }
 }
 @media (max-width: 519px) {
   #join-chat .device { max-width: none; border: 0; border-radius: 0; }
+  #join-chat .city-picker { width: 100%; max-width: none; margin: auto 0 0; border-radius: 16px 16px 0 0; }
 }
 </style>
 </head>
@@ -95,6 +128,16 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
     <div class="history" role="log" aria-label="پیام‌های گفت‌وگو"></div>
     <div class="composer" aria-label="پاسخ به پیام"></div>
   </section>
+  <dialog class="city-picker" aria-labelledby="city-picker-title">
+    <div class="city-picker-header">
+      <div class="city-picker-heading">
+        <h2 id="city-picker-title">شهر محل فعالیت</h2>
+        <form method="dialog"><button class="tool" type="submit">بستن</button></form>
+      </div>
+      <input class="city-search" type="search" aria-label="جست‌وجوی شهر یا محدوده" placeholder="نام شهر یا محدوده رو جست‌وجو کن" autocomplete="off" autofocus>
+    </div>
+    <div class="city-results" aria-label="شهرها و محدوده‌های فعالیت"></div>
+  </dialog>
 </main>
 <script>
 (() => {
@@ -102,6 +145,9 @@ const app = document.querySelector('#join-chat');
 const history = app.querySelector('.history');
 const composer = app.querySelector('.composer');
 const progress = app.querySelector('[data-progress]');
+const cityPicker = app.querySelector('.city-picker');
+const citySearch = cityPicker.querySelector('.city-search');
+const cityResults = cityPicker.querySelector('.city-results');
 const tasks = {
   personal: ['اطلاعات شخصی', 'می‌خوام اطلاعات شخصی‌مو ثبت کنم.'],
   license: ['گواهینامه', 'می‌خوام گواهینامه‌مو ثبت کنم.'],
@@ -114,7 +160,17 @@ const fields = [
   { key: 'father', label: 'نام پدر', question: 'اسم پدرت رو می‌نویسی؟' },
   { key: 'address', label: 'نشانی', question: 'نشانی محل سکونتت رو می‌نویسی؟' },
 ];
-const cities = ['تهران', 'کرج', 'مشهد', 'اصفهان', 'شیراز', 'تبریز', 'رشت', 'اهواز'];
+const serviceAreas = [
+  { name: 'تهران', covered: ['دماوند', 'اسلامشهر', 'لواسان', 'پاکدشت', 'پردیس', 'قدس', 'ری', 'رباط کریم', 'شهریار', 'ورامین'] },
+  { name: 'کرج', covered: ['چهارباغ', 'اشتهارد', 'فردیس', 'هشتگرد', 'ملارد', 'نظر آباد', 'ساوجبلاغ'] },
+  { name: 'اصفهان', covered: ['بهارستان', 'برخوار', 'فلاورجان', 'خمینی شهر', 'لنجان', 'مبارکه', 'نجف آباد', 'قهاب', 'شاهین شهر'] },
+  { name: 'مشهد', covered: ['احمد آباد', 'چناران', 'درزآب', 'گلبهار', 'کنویست', 'مینا ولایت', 'رضویه', 'تبادکان', 'طرقبه'] },
+  { name: 'تبریز', covered: ['آذر شهر', 'اسکو'] },
+  { name: 'شیراز', covered: ['مرودشت', 'زرقان'] },
+];
+const standaloneCities = ['رشت', 'اهواز', 'لنگرود', 'لشت‌نشا', 'لیسار', 'نوشهر', 'پره‌سر', 'رامسر',
+  'رضوان‌شهر', 'رودسر', 'سلمان‌شهر', 'شیرود', 'تنکابن', 'بهشهر'];
+const cities = [...serviceAreas, ...standaloneCities.map(name => ({ name, covered: [] }))];
 const documentTypes = {
   license: { card: 'کارت گواهینامه', receipt: 'رسید گواهینامه' },
   car: { card: 'کارت خودرو', green: 'برگ سبز' },
@@ -242,11 +298,69 @@ function options(title, buttons) {
   return '<div class="composer-title">' + escape(title) + '</div><div class="options">' + buttons + '</div>';
 }
 
+function normalizeCityName(name) {
+  return name.normalize('NFKC').replace(/[يى]/g, 'ی').replace(/ك/g, 'ک')
+    .replace(/آ/g, 'ا').replace(/[\s\u200c\u200d\u0640\u064b-\u065f-]/g, '');
+}
+
+function searchCities(query) {
+  const term = normalizeCityName(query);
+  const matches = [];
+  for (const city of cities) {
+    const name = normalizeCityName(city.name);
+    const covered = term ? city.covered.filter(place => normalizeCityName(place).includes(term)) : city.covered;
+    if (term && !name.includes(term) && !covered.length) continue;
+    const candidates = [name, ...covered.map(normalizeCityName)];
+    let rank = 3;
+    if (!term || name === term) rank = 0;
+    else if (candidates.includes(term)) rank = 1;
+    else if (candidates.some(candidate => candidate.startsWith(term))) rank = 2;
+    matches.push({ name: city.name, covered, rank });
+  }
+  return matches.sort((first, second) => first.rank - second.rank);
+}
+
+function renderCityResults() {
+  const query = citySearch.value;
+  const matches = searchCities(query);
+  const rows = matches.map(city => {
+    const coverage = city.covered.length
+      ? '<span class="city-coverage">تحت پوشش · ' + escape(city.covered.join('، ')) + '</span>'
+      : '';
+    return '<button class="city-result" type="button" data-city="' + escape(city.name) + '">' +
+      escape(city.name) + coverage + '</button>';
+  });
+  if (!matches.length) rows.push('<p class="city-empty" role="status">شهری با این نام پیدا نشد. املای دیگه‌ای رو امتحان کن یا «سایر» رو انتخاب کن.</p>');
+  if (!normalizeCityName(query) || !matches.length) {
+    rows.push('<button class="city-result" type="button" data-city="سایر">سایر</button>');
+  }
+  cityResults.innerHTML = rows.join('');
+  cityResults.scrollTop = 0;
+}
+
+function openCityPicker() {
+  citySearch.value = '';
+  renderCityResults();
+  cityPicker.showModal();
+}
+
+citySearch.addEventListener('input', renderCityResults);
+cityResults.addEventListener('click', event => {
+  const result = event.target.closest('button[data-city]');
+  if (!result) return;
+  const form = composer.querySelector('form');
+  const city = result.dataset.city;
+  form.querySelector('#answer').value = city;
+  form.querySelector('#choose-city').textContent = city;
+  form.querySelector('button[type=submit]').disabled = false;
+  cityPicker.close();
+});
+
 function inputForField() {
   const value = answers[field.key] || '';
   if (field.key === 'city') {
-    const cityOptions = cities.map(city => '<option' + (city === value ? ' selected' : '') + '>' + city + '</option>');
-    return '<select id="answer" required><option value="">انتخاب شهر</option>' + cityOptions.join('') + '</select>';
+    return '<button id="choose-city" class="option city-trigger" type="button" aria-haspopup="dialog">' +
+      escape(value || 'جست‌وجو و انتخاب شهر') + '</button><input id="answer" type="hidden" value="' + escape(value) + '">';
   }
   if (field.key === 'address') return '<textarea id="answer" rows="2" required>' + escape(value) + '</textarea>';
   const numeric = field.key === 'identity' ? ' inputmode="numeric" maxlength="10"' : '';
@@ -265,10 +379,14 @@ function render() {
       composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('برگشت به گفت‌وگو', 'resume') + '</div>');
     }
   } else if (mode === 'field') {
-    composer.innerHTML = '<form><label for="answer">' + field.label + '</label><div class="entry">' +
-      inputForField() + '<button class="send" type="submit">ارسال</button></div><div class="error" role="alert"></div></form>' +
+    const isCity = field.key === 'city';
+    const labelTarget = isCity ? 'choose-city' : 'answer';
+    const disabled = isCity && !answers.city ? ' disabled' : '';
+    composer.innerHTML = '<form><label for="' + labelTarget + '">' + field.label + '</label><div class="entry">' +
+      inputForField() + '<button class="send" type="submit"' + disabled + '>ارسال</button></div><div class="error" role="alert"></div></form>' +
       controls(true);
     composer.querySelector('form').onsubmit = submitAnswer;
+    if (isCity) composer.querySelector('#choose-city').onclick = openCityPicker;
   } else if (mode === 'fields') {
     const buttons = fields.map(item => option(item.label, 'field:' + item.key, answers[item.key] ? 'ثبت شده ✓' : ''));
     composer.innerHTML = options('کدوم مورد رو ثبت یا ویرایش کنیم؟', buttons.join('')) + controls();
