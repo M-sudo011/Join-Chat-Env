@@ -182,6 +182,69 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 }
 #join-chat .city-coverage, #join-chat .city-empty { color: light-dark(#515a53, #c4cec6); font-size: 12px; line-height: 1.8; }
 #join-chat .city-coverage { display: block; margin-top: 4px; }
+#join-chat .camera-sheet {
+  height: min(700px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
+  background: #101713;
+  color: #f4f8f5;
+  border-color: #36423a;
+}
+#join-chat .camera-header, #join-chat .camera-controls { flex: none; padding: 10px 16px; }
+#join-chat .camera-header .sheet-heading { margin-bottom: 0; }
+#join-chat .camera-sheet .tool { color: #f4f8f5; }
+#join-chat .camera-view { position: relative; flex: 1; min-height: 0; overflow: hidden; container-type: size; background: #202b24; }
+#join-chat .camera-view video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#join-chat .camera-view[data-shape="face"] video { transform: scaleX(-1); }
+#join-chat .camera-frame {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  width: 84%;
+  width: min(86cqw, 125cqh);
+  aspect-ratio: 1.586;
+  border: 1px solid rgb(255 255 255 / 75%);
+  border-radius: 10px;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 54%);
+  pointer-events: none;
+}
+#join-chat .camera-view[data-shape="paper"] .camera-frame { width: 60%; width: min(77cqw, 58cqh); aspect-ratio: .707; }
+#join-chat .camera-view[data-shape="face"] .camera-frame { width: 64%; width: min(67cqw, 55cqh); aspect-ratio: .74; border: 2px solid #fff; border-radius: 50%; }
+#join-chat .camera-corner { position: absolute; width: 22px; height: 22px; border: solid #fff; border-width: 0; }
+#join-chat .camera-corner:nth-child(1) { top: -1px; left: -1px; border-width: 3px 0 0 3px; border-top-left-radius: 10px; }
+#join-chat .camera-corner:nth-child(2) { top: -1px; right: -1px; border-width: 3px 3px 0 0; border-top-right-radius: 10px; }
+#join-chat .camera-corner:nth-child(3) { bottom: -1px; right: -1px; border-width: 0 3px 3px 0; border-bottom-right-radius: 10px; }
+#join-chat .camera-corner:nth-child(4) { bottom: -1px; left: -1px; border-width: 0 0 3px 3px; border-bottom-left-radius: 10px; }
+#join-chat .camera-view[data-shape="face"] .camera-corner { display: none; }
+#join-chat .camera-status {
+  position: absolute;
+  inset: 50% 12px auto;
+  transform: translateY(-50%);
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  margin: 0 auto;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 78%);
+  font-size: 13px;
+  text-align: center;
+}
+#join-chat .camera-controls { text-align: center; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+#join-chat .camera-hint { margin: 0 0 10px; color: #d8e5dc; font-size: 13px; line-height: 1.7; }
+#join-chat .camera-shutter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 30px;
+  background: #f4f8f5;
+  color: #101713;
+  font-size: 14px;
+}
+#join-chat .camera-shutter span { width: 24px; height: 24px; border: 2px solid currentColor; border-radius: 50%; }
+#join-chat .camera-fallback { min-height: 44px; margin-inline-start: 8px; text-decoration: underline; }
 @media (min-width: 520px) and (min-height: 690px) {
   #join-chat { padding: 22px 12px; }
   #join-chat .device { height: min(820px, calc(100dvh - 44px)); box-shadow: 0 16px 50px #0002; }
@@ -189,6 +252,7 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 @media (max-width: 519px) {
   #join-chat .device { max-width: none; border: 0; border-radius: 0; }
   #join-chat .sheet { width: 100%; max-width: none; margin: auto 0 0; border-radius: 16px 16px 0 0; }
+  #join-chat .camera-sheet { height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
 }
 </style>
 </head>
@@ -225,6 +289,26 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
     </div>
     <div class="sheet-body" data-progress-sections></div>
   </dialog>
+  <dialog class="sheet camera-sheet" id="photo-camera" aria-labelledby="camera-title" aria-describedby="camera-hint">
+    <header class="camera-header">
+      <div class="sheet-heading">
+        <h2 id="camera-title"></h2>
+        <button class="tool" type="button" data-camera-close autofocus>بستن</button>
+      </div>
+    </header>
+    <div class="camera-view" data-shape="card">
+      <video autoplay muted playsinline aria-hidden="true"></video>
+      <div class="camera-frame" aria-hidden="true">
+        <i class="camera-corner"></i><i class="camera-corner"></i><i class="camera-corner"></i><i class="camera-corner"></i>
+      </div>
+      <p class="camera-status" role="status" hidden></p>
+    </div>
+    <footer class="camera-controls">
+      <p class="camera-hint" id="camera-hint"></p>
+      <button class="camera-shutter" type="button" data-camera-capture disabled><span aria-hidden="true"></span>گرفتن عکس</button>
+      <button class="tool camera-fallback" type="button" data-camera-fallback hidden>دوربین گوشی</button>
+    </footer>
+  </dialog>
 </main>
 <script>
 (() => {
@@ -237,6 +321,14 @@ const progressSections = progressSheet.querySelector('[data-progress-sections]')
 const cityPicker = app.querySelector('.city-picker');
 const citySearch = cityPicker.querySelector('.city-search');
 const cityResults = cityPicker.querySelector('.city-results');
+const cameraSheet = app.querySelector('#photo-camera');
+const cameraView = cameraSheet.querySelector('.camera-view');
+const cameraVideo = cameraView.querySelector('video');
+const cameraStatus = cameraView.querySelector('.camera-status');
+const cameraCapture = cameraSheet.querySelector('[data-camera-capture]');
+const cameraFallback = cameraSheet.querySelector('[data-camera-fallback]');
+let cameraSession = 0;
+let cameraStream = null;
 const tasks = {
   personal: ['اطلاعات شخصی', 'می‌خوام اطلاعات شخصی‌مو ثبت کنم.'],
   license: ['گواهینامه', 'می‌خوام گواهینامه‌مو ثبت کنم.'],
@@ -654,6 +746,101 @@ function imageLabel(key = task, side = nextImage(key)) {
   return 'تصویر ' + label;
 }
 
+function releaseCamera() {
+  cameraSession += 1;
+  cameraStream?.getTracks().forEach(track => track.stop());
+  cameraStream = null;
+  cameraVideo.srcObject = null;
+  cameraCapture.disabled = true;
+}
+
+function closeCamera() {
+  releaseCamera();
+  cameraSheet.close();
+}
+
+async function openCamera() {
+  if (cameraSheet.open) return;
+  const session = ++cameraSession;
+  const isFace = task === 'live';
+  let shape = 'paper';
+  if (isFace) shape = 'face';
+  else if (documents[task].type === 'card') shape = 'card';
+
+  cameraView.dataset.shape = shape;
+  cameraSheet.querySelector('#camera-title').textContent = imageLabel();
+  cameraSheet.querySelector('#camera-hint').textContent = isFace
+    ? 'صورتت رو وسط قاب بگذار و به دوربین نگاه کن.'
+    : 'همه گوشه‌های مدرک رو داخل قاب بگذار و مطمئن شو نوشته‌ها واضحن.';
+  cameraStatus.textContent = 'در حال باز کردن دوربین…';
+  cameraStatus.hidden = false;
+  cameraCapture.disabled = true;
+  cameraFallback.hidden = true;
+  cameraSheet.showModal();
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: isFace ? 'user' : 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    });
+    if (session !== cameraSession) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
+    cameraStream = stream;
+    cameraVideo.srcObject = stream;
+    await cameraVideo.play();
+    if (session !== cameraSession) return;
+    cameraStatus.hidden = true;
+    cameraCapture.disabled = false;
+  } catch {
+    if (session !== cameraSession) return;
+    releaseCamera();
+    cameraStatus.textContent = 'دوربین در این صفحه باز نشد.';
+    cameraFallback.hidden = false;
+  }
+}
+
+function captureCameraPhoto() {
+  if (!cameraStream || cameraCapture.disabled) return;
+  const session = cameraSession;
+  cameraCapture.disabled = true;
+  const retry = () => {
+    cameraStatus.textContent = 'عکس ثبت نشد. دوباره امتحان کن.';
+    cameraStatus.hidden = false;
+    cameraCapture.disabled = false;
+  };
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = cameraVideo.videoWidth;
+    canvas.height = cameraVideo.videoHeight;
+    canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
+    canvas.toBlob(blob => {
+      if (session !== cameraSession) return;
+      if (!blob) {
+        retry();
+        return;
+      }
+      closeCamera();
+      previewPhoto({ url: URL.createObjectURL(blob) });
+    }, 'image/jpeg', .92);
+  } catch {
+    retry();
+  }
+}
+
+cameraSheet.querySelector('[data-camera-close]').addEventListener('click', closeCamera);
+cameraSheet.addEventListener('cancel', event => {
+  event.preventDefault();
+  closeCamera();
+});
+cameraCapture.addEventListener('click', captureCameraPhoto);
+cameraFallback.addEventListener('click', () => {
+  closeCamera();
+  composer.querySelector('#camera').click();
+});
+window.addEventListener('pagehide', () => { if (cameraSheet.open) closeCamera(); });
+
 function askPhoto() {
   mode = 'upload';
   if (task === 'live') {
@@ -760,6 +947,8 @@ function handleAction(action) {
       break;
     }
     case 'camera':
+      openCamera();
+      return;
     case 'gallery':
       composer.querySelector('#' + command).click();
       return;
