@@ -330,7 +330,7 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
   <section class="device" aria-label="گفت‌وگوی ثبت‌نام راننده">
     <header class="app-header">
       <span class="mark" aria-hidden="true">ت</span>
-      <div><div class="heading">همراه ثبت‌نام تپسی</div><div class="sub">نسخه آزمایشی</div></div>
+      <div><div class="heading">همراه ثبت‌نام تپسی</div><div class="sub" data-draft-status role="status">نسخه آزمایشی</div></div>
       <button class="progress-trigger" type="button" aria-haspopup="dialog" aria-controls="registration-progress">
         <span>پیشرفت ثبت‌نام</span><span class="sub" data-progress></span>
       </button>
@@ -483,6 +483,14 @@ const sampleDetails = {
 };
 const answers = {};
 const documents = { license: { images: {} }, car: { images: {} }, live: { images: {} } };
+const personalDrafts = {};
+const licenseDraft = {};
+const carDraft = {};
+const restoredPhotoSections = new Set();
+const draftStatus = app.querySelector('[data-draft-status]');
+const draftStore = 'drafts';
+let draftDatabase;
+let savedMode;
 let task = null;
 let field = null;
 let mode = 'tasks';
@@ -496,6 +504,117 @@ let isBotTyping = false;
 const escape = value => String(value).replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[char]);
+
+function openDraftDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('tapsi-join-chat-env', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(draftStore);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error('Draft storage is blocked'));
+  });
+}
+
+function readDraft() {
+  return new Promise((resolve, reject) => {
+    const request = draftDatabase.transaction(draftStore).objectStore(draftStore).get('registration');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function writeDraft(draft) {
+  return new Promise((resolve, reject) => {
+    const transaction = draftDatabase.transaction(draftStore, 'readwrite');
+    const store = transaction.objectStore(draftStore);
+    if (draft) store.put(draft, 'registration');
+    else store.delete('registration');
+    transaction.oncomplete = resolve;
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
+function photoData(photo) {
+  if (!photo) return null;
+  return photo.sample ? { sample: true } : { blob: photo.blob };
+}
+
+function photoPreview(photo) {
+  if (!photo?.blob) return photo;
+  return { blob: photo.blob, url: URL.createObjectURL(photo.blob) };
+}
+
+function showDraftStatus(message) {
+  if (draftStatus.textContent !== message) draftStatus.textContent = message;
+}
+
+function saveDraft() {
+  if (!draftDatabase || !task || mode === 'welcome-back') return;
+  const savedDocuments = Object.fromEntries(Object.entries(documents).map(([key, item]) => [key, {
+    ...item, images: Object.fromEntries(Object.entries(item.images).map(([side, photo]) => [side, photoData(photo)])),
+  }]));
+  writeDraft({
+    version: 1, task, field: field?.key, mode, previousMode, editing, submitted,
+    answers, personalDrafts, licenseDraft, carDraft, documents: savedDocuments, pendingPhoto: photoData(pendingPhoto),
+  }).then(() => showDraftStatus('پیش‌نویس روی دستگاه ذخیره شد'))
+    .catch(() => showDraftStatus('ذخیره پیش‌نویس انجام نشد'));
+}
+
+function restoreDraft(draft) {
+  if (draft?.version !== 1 || !Object.hasOwn(tasks, draft.task)) return false;
+  Object.assign(answers, draft.answers);
+  Object.assign(personalDrafts, draft.personalDrafts);
+  Object.assign(licenseDraft, draft.licenseDraft);
+  Object.assign(carDraft, draft.carDraft);
+  for (const key of Object.keys(documents)) {
+    const saved = draft.documents[key];
+    Object.assign(documents[key], saved, {
+      images: Object.fromEntries(Object.entries(saved.images).map(([side, photo]) => [side, photoPreview(photo)])),
+    });
+    if (Object.keys(saved.images).length) restoredPhotoSections.add(key);
+  }
+  task = draft.task;
+  field = fields.find(item => item.key === draft.field) || null;
+  editing = draft.editing;
+  submitted = draft.submitted;
+  previousMode = draft.previousMode;
+  pendingPhoto = photoPreview(draft.pendingPhoto);
+  savedMode = draft.mode;
+  mode = 'welcome-back';
+  return true;
+}
+
+function showRestoredPhotos(key) {
+  if (!restoredPhotoSections.delete(key)) return;
+  for (const [side, photo] of Object.entries(documents[key].images)) driver(imageLabel(key, side), { photo });
+}
+
+function continueDraft() {
+  if (submitted) {
+    mode = 'submitted';
+    return;
+  }
+  mode = savedMode === 'tasks' ? previousMode : savedMode;
+  showRestoredPhotos(task);
+  if (mode === 'field' && field) askField(field, editing);
+  else if (mode === 'photo' && pendingPhoto) previewPhoto(pendingPhoto);
+  else if (mode === 'review' || mode === 'upload' || mode === 'doctype') chooseTask(task);
+  else if (mode !== 'fields') {
+    const next = Object.keys(tasks).find(key => !isComplete(key));
+    if (next) chooseTask(next);
+    else mode = 'tasks';
+  }
+}
+
+async function resetDraft() {
+  if (!window.confirm('ثبت‌نام از اول شروع بشه؟ پیش‌نویس روی این دستگاه پاک می‌شه.')) return;
+  try {
+    if (draftDatabase) await writeDraft(null);
+    window.location.reload();
+  } catch {
+    showDraftStatus('پاک کردن پیش‌نویس انجام نشد');
+  }
+}
 
 function addMessage(who, text, options = {}) {
   const bubble = document.createElement('div');
@@ -542,7 +661,7 @@ function showNextBotMessage() {
     isBotTyping = false;
     composer.inert = false;
     history.querySelectorAll('button.editor').forEach(button => { button.disabled = false; });
-    render();
+    render(false);
     return;
   }
 
@@ -643,7 +762,8 @@ function syncProgressActions() {
   progressSections.querySelectorAll('button[data-action]').forEach(button => { button.disabled = isBotTyping; });
 }
 
-app.querySelector('.progress-trigger').addEventListener('click', openProgress);
+const progressTrigger = app.querySelector('.progress-trigger');
+progressTrigger.addEventListener('click', openProgress);
 progressSections.addEventListener('click', event => {
   const card = event.target.closest('button[data-section]');
   if (card) {
@@ -734,11 +854,13 @@ cityResults.addEventListener('click', event => {
   form.querySelector('#answer').value = city;
   form.querySelector('#choose-city').textContent = city;
   form.querySelector('button[type=submit]').disabled = false;
+  personalDrafts.city = city;
+  saveDraft();
   cityPicker.close();
 });
 
 function inputForField() {
-  const value = answers[field.key] || '';
+  const value = personalDrafts[field.key] ?? answers[field.key] ?? '';
   if (field.key === 'city') {
     return '<button id="choose-city" class="option city-trigger" type="button" aria-haspopup="dialog">' +
       escape(value || 'جست‌وجو و انتخاب شهر') + '</button><input id="answer" type="hidden" value="' + escape(value) + '">';
@@ -748,22 +870,31 @@ function inputForField() {
   return '<input id="answer" required' + numeric + ' value="' + escape(value) + '" autocomplete="off">';
 }
 
-function render() {
+function render(persist = true) {
   const complete = Object.keys(tasks).filter(isComplete).length;
   progress.textContent = persian(complete) + ' از ۴ بخش';
+  if (persist) saveDraft();
   if (progressSheet.open) syncProgressActions();
   if (isBotTyping) return;
-  if (mode === 'tasks') {
+  if (mode === 'welcome-back') {
+    const label = submitted ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
+    composer.innerHTML = options('ثبت‌نام قبلی روی این دستگاه ذخیره شده', option(label, 'continue-draft')) +
+      '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
+  } else if (mode === 'submitted') {
+    composer.innerHTML = '<div class="composer-title">وضعیت ثبت‌نام آزمایشی · در حال بررسی</div><div class="tools">' +
+      smallAction('شروع دوباره', 'reset-draft') + '</div>';
+  } else if (mode === 'tasks') {
     const taskButtons = Object.entries(tasks).map(([key, [label]]) => option(label, 'task:' + key, taskStatus(key)));
     if (complete === 4 && !submitted) taskButtons.push(option('ارسال آزمایشی برای بررسی', 'submit'));
     composer.innerHTML = options('از کدوم بخش ادامه بدیم؟', taskButtons.join(''));
     if (task && previousMode !== 'tasks') {
       composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('برگشت به گفت‌وگو', 'resume') + '</div>');
     }
+    if (task) composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>');
   } else if (mode === 'field') {
     const isCity = field.key === 'city';
     const labelTarget = isCity ? 'choose-city' : 'answer';
-    const disabled = isCity && !answers.city ? ' disabled' : '';
+    const disabled = isCity && !(personalDrafts.city ?? answers.city) ? ' disabled' : '';
     composer.innerHTML = '<form><label for="' + labelTarget + '">' + field.label + '</label><div class="entry">' +
       inputForField() + '<button class="send" type="submit"' + disabled + '>ارسال</button></div><div class="error" role="alert"></div></form>' +
       controls(true);
@@ -784,7 +915,7 @@ function render() {
       '<input type="file" accept="image/*" id="gallery">' + controls();
     composer.querySelectorAll('input[type=file]').forEach(input => {
       input.onchange = () => {
-        if (input.files.length) previewPhoto({ url: URL.createObjectURL(input.files[0]) });
+        if (input.files.length) previewPhoto({ blob: input.files[0] });
       };
     });
   } else if (mode === 'photo') {
@@ -806,6 +937,7 @@ function render() {
 }
 
 function askField(item, edit = false) {
+  if (task !== 'personal') pendingPhoto = null;
   task = 'personal';
   field = item;
   editing = edit;
@@ -837,6 +969,7 @@ function submitAnswer(event) {
   }
   const answered = field;
   answers[answered.key] = value;
+  delete personalDrafts[answered.key];
   const visibleValue = answered.key === 'identity' ? '••••••' + value.slice(-4) : value;
   driver(visibleValue, { edit: () => { askField(answered, true); render(); } });
   bot(editing ? 'اصلاح شد.' : 'ثبت شد.');
@@ -844,6 +977,16 @@ function submitAnswer(event) {
   else nextField();
   render();
 }
+
+composer.addEventListener('input', event => {
+  const input = event.target;
+  if (mode === 'field' && input.id === 'answer') {
+    personalDrafts[field.key] = input.value;
+  } else if (mode === 'review' && task === 'license' && input.dataset.reviewField) {
+    licenseDraft[input.dataset.reviewField] = input.value;
+  } else return;
+  saveDraft();
+});
 
 function imageKeys(key = task) {
   if (key === 'live') return ['face'];
@@ -938,7 +1081,7 @@ function captureCameraPhoto() {
         return;
       }
       closeCamera();
-      previewPhoto({ url: URL.createObjectURL(blob) });
+      previewPhoto({ blob });
     }, 'image/jpeg', .92);
   } catch {
     retry();
@@ -967,8 +1110,8 @@ function askPhoto() {
 }
 
 function previewPhoto(photo) {
-  pendingPhoto = photo;
-  driver(imageLabel(), { photo });
+  pendingPhoto = photo.url ? photo : photoPreview(photo);
+  driver(imageLabel(), { photo: pendingPhoto });
   bot('این تصویر رو استفاده کنیم؟');
   mode = 'photo';
   render();
@@ -1112,6 +1255,8 @@ birthPicker.querySelector('[data-birthdate-confirm]').addEventListener('click', 
   const value = [dateDigits(year), dateDigits(month, 2), dateDigits(day, 2)].join('/');
   composer.querySelector('#birthdate-value').value = value;
   composer.querySelector('[data-birthdate-display]').textContent = value;
+  licenseDraft[birthdateLabel] = value;
+  saveDraft();
   birthPicker.close();
 });
 
@@ -1168,6 +1313,10 @@ function buildCarReview(details) {
     '<section class="car-owner"><h3>اطلاعات مالک</h3><label class="car-field">نام مالک<input name="owner" required value="' +
     escape(details['نام مالک'] || '') + '"></label><label class="car-field">کد ملی مالک<input name="owner-id" inputmode="numeric" required value="' +
     escape(details['کد ملی مالک'] || '') + '"></label></section></div>';
+  for (const [name, value] of Object.entries(carDraft)) {
+    const input = carReviewForm.elements.namedItem(name);
+    if (input) input.value = value;
+  }
   syncPlateType();
 }
 
@@ -1191,8 +1340,17 @@ function openCarReview() {
   carReviewFields.scrollTop = 0;
 }
 
+function saveCarField(event) {
+  const { name, value } = event.target;
+  if (!name || carDraft[name] === value) return;
+  carDraft[name] = value;
+  saveDraft();
+}
+
+carReviewForm.addEventListener('input', saveCarField);
 carReviewForm.addEventListener('change', event => {
   if (event.target.name === 'plate-type') syncPlateType();
+  saveCarField(event);
 });
 
 carReviewForm.addEventListener('submit', event => {
@@ -1217,6 +1375,8 @@ carReviewForm.addEventListener('submit', event => {
 
 function finishReview(key, details) {
   documents[key].details = details;
+  const draft = key === 'car' ? carDraft : licenseDraft;
+  for (const name of Object.keys(draft)) delete draft[name];
   driver('اطلاعات مدرک رو تأیید می‌کنم.');
   bot(titles(key) + ' ثبت شد. کدوم بخش رو ادامه بدیم؟');
   mode = 'done';
@@ -1228,7 +1388,7 @@ function renderReview() {
     composer.innerHTML = options('بررسی اطلاعات مدرک', option('بررسی اطلاعات خودرو', 'car-review')) + controls();
     return;
   }
-  const details = documents[task].details || sampleDetails[task];
+  const details = { ...(documents.license.details || sampleDetails.license), ...licenseDraft };
   const inputs = Object.entries(details).map(([label, value]) => {
     if (label === birthdateLabel) {
       return '<div><label for="birthdate-trigger">' + birthdateLabel + '</label>' +
@@ -1236,7 +1396,7 @@ function renderReview() {
         '<span data-birthdate-display>' + escape(value || 'انتخاب تاریخ تولد') + '</span><span aria-hidden="true">⌄</span></button>' +
         '<input type="hidden" id="birthdate-value" value="' + escape(value) + '"></div>';
     }
-    return '<label>' + escape(label) + '<input required value="' + escape(value) + '"></label>';
+    return '<label>' + escape(label) + '<input data-review-field="' + escape(label) + '" required value="' + escape(value) + '"></label>';
   });
   composer.innerHTML = '<div class="composer-title">بررسی اطلاعات مدرک</div><form><div class="review-grid">' +
     inputs.join('') + '</div><button class="send review-action" type="submit">تأیید اطلاعات</button></form>' + controls();
@@ -1257,6 +1417,7 @@ function titles(key) {
 function chooseTask(key) {
   if (key !== task) pendingPhoto = null;
   task = key;
+  showRestoredPhotos(key);
   driver(tasks[key][1]);
   if (task === 'personal') {
     if (isComplete(task)) mode = 'fields';
@@ -1281,6 +1442,8 @@ function chooseTask(key) {
 function handleAction(action) {
   const [command, key] = action.split(':');
   switch (command) {
+    case 'continue-draft': continueDraft(); break;
+    case 'reset-draft': resetDraft(); return;
     case 'task': chooseTask(key); break;
     case 'field': askField(fields.find(item => item.key === key), Boolean(answers[key])); break;
     case 'type':
@@ -1324,16 +1487,37 @@ function handleAction(action) {
     case 'keep': acceptPhoto(); break;
     case 'submit':
       submitted = true;
+      mode = 'submitted';
       driver('ثبت‌نام رو برای بررسی می‌فرستم.');
-      bot('ارسال آزمایشی انجام شد. برای شروع دوباره، صفحه رو تازه کن.');
+      bot('ارسال آزمایشی انجام شد. وضعیت ثبت‌نام روی این دستگاه ذخیره می‌شه.');
       break;
   }
   render();
 }
 
-bot('سلام! به ثبت‌نام رانندگان تپسی خوش اومدی. با هم اطلاعات و مدارکت رو ثبت می‌کنیم.');
-bot('این نسخه آزمایشیه. می‌تونی با اطلاعات و تصویر نمونه امتحانش کنی. دوست داری از کدوم بخش شروع کنیم؟');
-render();
+async function startRegistration() {
+  progressTrigger.disabled = true;
+  composer.textContent = 'در حال بررسی پیش‌نویس…';
+  let restored = false;
+  try {
+    draftDatabase = await openDraftDatabase();
+    restored = restoreDraft(await readDraft());
+  } catch {
+    draftDatabase = null;
+    showDraftStatus('ذخیره روی دستگاه در دسترس نیست');
+  }
+  progressTrigger.disabled = false;
+  if (restored) {
+    showDraftStatus('پیش‌نویس روی دستگاه ذخیره شد');
+    bot('خوش برگشتی! می‌تونی ثبت‌نام قبلی رو ادامه بدی.');
+  } else {
+    bot('سلام! به ثبت‌نام رانندگان تپسی خوش اومدی. با هم اطلاعات و مدارکت رو ثبت می‌کنیم.');
+    bot('این نسخه آزمایشیه. می‌تونی با اطلاعات و تصویر نمونه امتحانش کنی. دوست داری از کدوم بخش شروع کنیم؟');
+  }
+  render(false);
+}
+
+startRegistration();
 })();
 </script>
 </body>
