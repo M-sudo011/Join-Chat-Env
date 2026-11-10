@@ -313,6 +313,31 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 #join-chat .car-review-footer { flex: none; padding: 10px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid light-dark(#e1e6e2, #455048); }
 #join-chat .car-review-footer .send { width: 100%; }
 #join-chat .car-review-footer .error:empty { display: none; }
+#join-chat .application-body { padding-block: 14px; }
+#join-chat .application-footer { flex: none; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid light-dark(#e1e6e2, #455048); }
+#join-chat .application-footer .send { width: 100%; }
+#join-chat .review-card { margin-bottom: 10px; padding: 12px; border: 1px solid light-dark(#e1e6e2, #455048); border-radius: 12px; }
+#join-chat .review-card:last-child { margin-bottom: 0; }
+#join-chat .review-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#join-chat .review-card h3 { margin: 0; font-size: 14px; }
+#join-chat .review-card .tool { text-decoration: underline; }
+#join-chat .review-values { display: grid; gap: 7px; margin: 8px 0 0; font-size: 13px; }
+#join-chat .review-values div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 8px; }
+#join-chat .review-values dt { color: light-dark(#525c55, #c1cbc4); }
+#join-chat .review-values dd { margin: 0; overflow-wrap: anywhere; }
+#join-chat .review-photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#join-chat .review-photos figure { flex: 1 1 118px; max-width: 50%; margin: 0; min-width: 0; }
+#join-chat .review-photos img, #join-chat .review-photo-placeholder { display: grid; place-items: center; width: 100%; height: 76px; border-radius: 8px; background: light-dark(#edf2ee, #29362e); object-fit: contain; font-size: 12px; }
+#join-chat .review-photos figcaption { margin-top: 4px; font-size: 11px; }
+#join-chat .application-state { padding: 14px; border-radius: 12px; background: light-dark(#edf3f9, #273b4e); }
+#join-chat .application-state[data-phase="correction"] { background: light-dark(#fff3df, #4a3624); }
+#join-chat .application-state[data-phase="approved"] { background: light-dark(#e5f5eb, #283e31); }
+#join-chat .application-state strong { font-size: 17px; }
+#join-chat .application-state p, #join-chat .correction-item p { margin: 6px 0 0; font-size: 13px; line-height: 1.7; }
+#join-chat .application-timeline { display: grid; gap: 13px; margin: 18px 0 8px; padding: 0; list-style: none; font-size: 13px; }
+#join-chat .application-timeline li { display: flex; align-items: center; gap: 8px; }
+#join-chat .correction-item { margin-top: 14px; padding: 12px; border: 1px solid light-dark(#ead0a6, #705738); border-radius: 10px; }
+#join-chat .correction-item .send { margin-top: 12px; width: 100%; }
 @media (min-width: 520px) and (min-height: 690px) {
   #join-chat { padding: 22px 12px; }
   #join-chat .device { height: min(820px, calc(100dvh - 44px)); box-shadow: 0 16px 50px #0002; }
@@ -332,7 +357,7 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
       <span class="mark" aria-hidden="true">ت</span>
       <div><div class="heading">همراه ثبت‌نام تپسی</div><div class="sub" data-draft-status role="status">نسخه آزمایشی</div></div>
       <button class="progress-trigger" type="button" aria-haspopup="dialog" aria-controls="registration-progress">
-        <span>پیشرفت ثبت‌نام</span><span class="sub" data-progress></span>
+        <span data-progress-label>پیشرفت ثبت‌نام</span><span class="sub" data-progress></span>
       </button>
     </header>
     <div class="history" role="log" aria-label="پیام‌های گفت‌وگو"></div>
@@ -406,6 +431,27 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
       </footer>
     </form>
   </dialog>
+  <dialog class="sheet" id="final-review" aria-labelledby="final-review-title">
+    <header class="sheet-header">
+      <div class="sheet-heading">
+        <h2 id="final-review-title">مرور نهایی ثبت‌نام</h2>
+        <form method="dialog"><button class="tool" type="submit" autofocus>بستن</button></form>
+      </div>
+      <div class="sub">قبل از ارسال، اطلاعات و تصویر مدارکت رو بررسی کن.</div>
+    </header>
+    <div class="sheet-body application-body" data-final-review></div>
+    <footer class="application-footer"><button class="send" type="button" data-submit-application>ارسال برای بررسی</button></footer>
+  </dialog>
+  <dialog class="sheet" id="application-status" aria-labelledby="application-status-title">
+    <header class="sheet-header">
+      <div class="sheet-heading">
+        <h2 id="application-status-title">وضعیت ثبت‌نام</h2>
+        <form method="dialog"><button class="tool" type="submit" autofocus>بستن</button></form>
+      </div>
+      <div class="sub">نتیجه بررسی آزمایشی</div>
+    </header>
+    <div class="sheet-body application-body" data-application-status aria-live="polite"></div>
+  </dialog>
 </main>
 <script>
 (() => {
@@ -429,6 +475,10 @@ const birthWheels = [...birthPicker.querySelectorAll('.birth-wheel')];
 const carReview = app.querySelector('#car-review');
 const carReviewForm = carReview.querySelector('.car-review-form');
 const carReviewFields = carReview.querySelector('[data-car-fields]');
+const finalReview = app.querySelector('#final-review');
+const finalReviewBody = finalReview.querySelector('[data-final-review]');
+const statusSheet = app.querySelector('#application-status');
+const statusBody = statusSheet.querySelector('[data-application-status]');
 let carReviewSource;
 let openCarReviewAfterReply = false;
 const birthdateLabel = 'تاریخ تولد';
@@ -497,7 +547,11 @@ let mode = 'tasks';
 let previousMode = 'tasks';
 let editing = false;
 let pendingPhoto = null;
-let submitted = false;
+let application = null;
+let correctingDocument = false;
+let reviewTimer;
+const demoReviewDelay = 7000;
+const reviewLabels = { reviewing: 'در حال بررسی', correction: 'نیاز به اصلاح', rechecking: 'در حال بررسی مجدد', approved: 'تأیید شد' };
 const botQueue = [];
 let isBotTyping = false;
 
@@ -549,12 +603,13 @@ function showDraftStatus(message) {
 }
 
 function saveDraft() {
-  if (!draftDatabase || !task || mode === 'welcome-back') return;
+  if (!draftDatabase || !task) return;
   const savedDocuments = Object.fromEntries(Object.entries(documents).map(([key, item]) => [key, {
     ...item, images: Object.fromEntries(Object.entries(item.images).map(([side, photo]) => [side, photoData(photo)])),
   }]));
   writeDraft({
-    version: 1, task, field: field?.key, mode, previousMode, editing, submitted,
+    version: 1, task, field: field?.key, mode: mode === 'welcome-back' ? savedMode : mode, previousMode, editing,
+    application, correctingDocument,
     answers, personalDrafts, licenseDraft, carDraft, documents: savedDocuments, pendingPhoto: photoData(pendingPhoto),
   }).then(() => showDraftStatus('پیش‌نویس روی دستگاه ذخیره شد'))
     .catch(() => showDraftStatus('ذخیره پیش‌نویس انجام نشد'));
@@ -576,7 +631,9 @@ function restoreDraft(draft) {
   task = draft.task;
   field = fields.find(item => item.key === draft.field) || null;
   editing = draft.editing;
-  submitted = draft.submitted;
+  application = Object.hasOwn(reviewLabels, draft.application?.phase) ? draft.application :
+    (draft.submitted ? newApplicationReview() : null);
+  correctingDocument = Boolean(draft.correctingDocument) && application?.phase === 'correction';
   previousMode = draft.previousMode;
   pendingPhoto = photoPreview(draft.pendingPhoto);
   savedMode = draft.mode;
@@ -590,11 +647,17 @@ function showRestoredPhotos(key) {
 }
 
 function continueDraft() {
-  if (submitted) {
+  if (application && !correctingDocument) {
     mode = 'submitted';
+    openApplicationStatus();
     return;
   }
   mode = savedMode === 'tasks' ? previousMode : savedMode;
+  if (correctingDocument) {
+    if (mode === 'photo' && pendingPhoto) previewPhoto(pendingPhoto);
+    else askPhoto();
+    return;
+  }
   showRestoredPhotos(task);
   if (mode === 'field' && field) askField(field, editing);
   else if (mode === 'photo' && pendingPhoto) previewPhoto(pendingPhoto);
@@ -606,13 +669,127 @@ function continueDraft() {
   }
 }
 
+function newApplicationReview() {
+  return { phase: 'reviewing', dueAt: Date.now() + demoReviewDelay, flagSide: documents.license.type === 'card' ? 'back' : 'single' };
+}
+
+function reviewValues(values) {
+  return '<dl class="review-values">' + Object.entries(values).map(([label, value]) => {
+    const display = /کد ملی/.test(label) ? '••••••' + value.slice(-4) : value;
+    return '<div><dt>' + escape(label) + '</dt><dd>' + escape(display) + '</dd></div>';
+  }).join('') + '</dl>';
+}
+
+function reviewPhotos(key) {
+  return '<div class="review-photos">' + Object.entries(documents[key].images).map(([side, photo]) => {
+    const label = escape(imageLabel(key, side));
+    const preview = photo.url ? '<img src="' + escape(photo.url) + '" alt="' + label + '">' :
+      '<div class="review-photo-placeholder">تصویر نمونه</div>';
+    return '<figure>' + preview + '<figcaption>' + label + '</figcaption></figure>';
+  }).join('') + '</div>';
+}
+
+function openFinalReview() {
+  if (application || !Object.keys(tasks).every(isComplete)) return;
+  const personal = Object.fromEntries(fields.map(item => [item.label, answers[item.key]]));
+  finalReviewBody.innerHTML = Object.keys(tasks).map(key => {
+    const edit = key === 'live' ? '' : '<button class="tool" type="button" data-edit-section="' + key + '">ویرایش</button>';
+    const values = key === 'personal' ? reviewValues(personal) : documents[key].details ? reviewValues(documents[key].details) : '';
+    const photos = key === 'personal' ? '' : reviewPhotos(key);
+    return '<section class="review-card"><div class="review-card-heading"><h3>' + escape(titles(key)) + '</h3>' + edit +
+      '</div>' + values + photos + '</section>';
+  }).join('');
+  finalReview.showModal();
+  finalReviewBody.scrollTop = 0;
+}
+
+function renderApplicationStatus() {
+  const { phase, flagSide } = application;
+  const messages = {
+    reviewing: 'درخواست ثبت‌نام دریافت شد. داریم مدارک رو بررسی می‌کنیم.',
+    correction: 'برای ادامه بررسی، فقط تصویر مشخص‌شده رو جایگزین کن.',
+    rechecking: 'تصویر جدید دریافت شد و در حال بررسیه.',
+    approved: 'بررسی آزمایشی ثبت‌نام با موفقیت انجام شد.',
+  };
+  const timeline = [
+    ['درخواست دریافت شد', true],
+    [phase === 'correction' ? 'بررسی اولیه انجام شد' : reviewLabels[phase], phase === 'correction' || phase === 'approved'],
+  ];
+  const marker = (done) => '<span class="progress-check"' + (done ? ' data-filled>✓' : '>') + '</span>';
+  statusBody.innerHTML = '<section class="application-state" data-phase="' + phase + '"><strong>' + reviewLabels[phase] +
+    '</strong><p>' + messages[phase] + '</p></section><ul class="application-timeline">' +
+    timeline.map(([label, done]) => '<li>' + marker(done) + label + '</li>').join('') + '</ul>';
+  if (phase === 'correction') {
+    statusBody.insertAdjacentHTML('beforeend', '<section class="correction-item"><strong>' + escape(imageLabel('license', flagSide)) +
+      '</strong><p>نوشته‌های تصویر خوانا نیست. یه عکس واضح‌تر از همین بخش بفرست.</p>' +
+      '<button class="send" type="button" data-fix-document>اصلاح همین مدرک</button></section>');
+  }
+}
+
+function refreshApplicationStatus() {
+  clearTimeout(reviewTimer);
+  if (!application) return;
+  const phase = application.phase;
+  if (phase === 'reviewing' || phase === 'rechecking') {
+    const remaining = application.dueAt - Date.now();
+    if (remaining > 0) reviewTimer = setTimeout(refreshApplicationStatus, remaining);
+    else {
+      application.phase = phase === 'reviewing' ? 'correction' : 'approved';
+      saveDraft();
+    }
+  }
+  progress.textContent = reviewLabels[application.phase];
+  if (statusSheet.open) renderApplicationStatus();
+}
+
+function openApplicationStatus() {
+  if (!application || statusSheet.open) return;
+  refreshApplicationStatus();
+  renderApplicationStatus();
+  statusSheet.showModal();
+}
+
+function startDocumentCorrection() {
+  if (application?.phase !== 'correction') return;
+  statusSheet.close();
+  task = 'license';
+  correctingDocument = true;
+  pendingPhoto = null;
+  askPhoto();
+  render();
+}
+
+finalReviewBody.addEventListener('click', event => {
+  const edit = event.target.closest('[data-edit-section]');
+  if (!edit) return;
+  finalReview.close();
+  handleAction('task:' + edit.dataset.editSection);
+});
+
+finalReview.querySelector('[data-submit-application]').addEventListener('click', () => {
+  if (application || !Object.keys(tasks).every(isComplete)) return;
+  finalReview.close();
+  application = newApplicationReview();
+  mode = 'submitted';
+  driver('ثبت‌نام رو برای بررسی می‌فرستم.');
+  bot('درخواست ثبت شد. نتیجه رو از وضعیت ثبت‌نام دنبال کن.');
+  render();
+  openApplicationStatus();
+});
+
+statusBody.addEventListener('click', event => {
+  if (event.target.closest('[data-fix-document]')) startDocumentCorrection();
+});
+
 async function resetDraft() {
   if (!window.confirm('ثبت‌نام از اول شروع بشه؟ پیش‌نویس روی این دستگاه پاک می‌شه.')) return;
+  clearTimeout(reviewTimer);
   try {
     if (draftDatabase) await writeDraft(null);
     window.location.reload();
   } catch {
     showDraftStatus('پاک کردن پیش‌نویس انجام نشد');
+    refreshApplicationStatus();
   }
 }
 
@@ -660,7 +837,7 @@ function showNextBotMessage() {
   if (!message) {
     isBotTyping = false;
     composer.inert = false;
-    history.querySelectorAll('button.editor').forEach(button => { button.disabled = false; });
+    history.querySelectorAll('button.editor').forEach(button => { button.disabled = Boolean(application); });
     render(false);
     return;
   }
@@ -711,6 +888,10 @@ function progressSteps(key) {
 }
 
 function openProgress() {
+  if (application) {
+    openApplicationStatus();
+    return;
+  }
   const keys = Object.keys(tasks);
   const complete = keys.filter(isComplete).length;
   progressSheet.querySelector('[data-progress-summary]').textContent = persian(complete) + ' از ۴ بخش تکمیل شده';
@@ -789,6 +970,7 @@ function smallAction(label, action) {
 }
 
 function controls(personal = false) {
+  if (correctingDocument) return '<div class="tools">' + smallAction('بازگشت به وضعیت ثبت‌نام', 'view-status') + '</div>';
   const extras = personal
     ? smallAction('این سؤال بمونه برای بعد', 'skip') + smallAction('انتخاب سؤال', 'fields')
     : '';
@@ -872,20 +1054,23 @@ function inputForField() {
 
 function render(persist = true) {
   const complete = Object.keys(tasks).filter(isComplete).length;
-  progress.textContent = persian(complete) + ' از ۴ بخش';
+  progress.textContent = application ? reviewLabels[application.phase] : persian(complete) + ' از ۴ بخش';
+  progressTrigger.querySelector('[data-progress-label]').textContent = application ? 'وضعیت ثبت‌نام' : 'پیشرفت ثبت‌نام';
+  progressTrigger.setAttribute('aria-controls', application ? 'application-status' : 'registration-progress');
   if (persist) saveDraft();
   if (progressSheet.open) syncProgressActions();
   if (isBotTyping) return;
   if (mode === 'welcome-back') {
-    const label = submitted ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
+    let label = application ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
+    if (correctingDocument) label = 'ادامه اصلاح مدرک';
     composer.innerHTML = options('ثبت‌نام قبلی روی این دستگاه ذخیره شده', option(label, 'continue-draft')) +
       '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
   } else if (mode === 'submitted') {
-    composer.innerHTML = '<div class="composer-title">وضعیت ثبت‌نام آزمایشی · در حال بررسی</div><div class="tools">' +
-      smallAction('شروع دوباره', 'reset-draft') + '</div>';
+    composer.innerHTML = options('پیگیری درخواست', option('مشاهده وضعیت ثبت‌نام', 'view-status')) +
+      '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
   } else if (mode === 'tasks') {
     const taskButtons = Object.entries(tasks).map(([key, [label]]) => option(label, 'task:' + key, taskStatus(key)));
-    if (complete === 4 && !submitted) taskButtons.push(option('ارسال آزمایشی برای بررسی', 'submit'));
+    if (complete === 4) taskButtons.unshift(option('مرور و ارسال', 'final-review'));
     composer.innerHTML = options('از کدوم بخش ادامه بدیم؟', taskButtons.join(''));
     if (task && previousMode !== 'tasks') {
       composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('برگشت به گفت‌وگو', 'resume') + '</div>');
@@ -919,12 +1104,15 @@ function render(persist = true) {
       };
     });
   } else if (mode === 'photo') {
+    const keep = correctingDocument ? 'ارسال تصویر اصلاح‌شده' : 'بله، همین تصویر';
     composer.innerHTML = options('تصویر رو تأیید می‌کنی؟',
-      option('بله، همین تصویر', 'keep') + option('دوباره انتخاب می‌کنم', 'retake')) + controls();
+      option(keep, 'keep') + option('دوباره انتخاب می‌کنم', 'retake')) + controls();
   } else if (mode === 'review') {
     renderReview();
   } else {
-    composer.innerHTML = options('ادامه ثبت‌نام', option('بخش بعدی رو انتخاب می‌کنم', 'tasks'));
+    const next = complete === 4 ? option('مرور و ارسال', 'final-review') + option('بازگشت به بخش‌ها', 'tasks') :
+      option('بخش بعدی رو انتخاب می‌کنم', 'tasks');
+    composer.innerHTML = options(complete === 4 ? 'همه بخش‌ها تکمیل شده' : 'ادامه ثبت‌نام', next);
   }
   composer.querySelectorAll('[data-action]').forEach(button => {
     button.onclick = () => handleAction(button.dataset.action);
@@ -994,6 +1182,7 @@ function imageKeys(key = task) {
 }
 
 function nextImage(key = task) {
+  if (correctingDocument && key === 'license') return application.flagSide;
   return imageKeys(key).find(side => !documents[key].images[side]);
 }
 
@@ -1120,6 +1309,16 @@ function previewPhoto(photo) {
 function acceptPhoto() {
   documents[task].images[nextImage()] = pendingPhoto;
   pendingPhoto = null;
+  if (correctingDocument) {
+    correctingDocument = false;
+    application.phase = 'rechecking';
+    application.dueAt = Date.now() + demoReviewDelay;
+    mode = 'submitted';
+    driver('تصویر اصلاح‌شده رو می‌فرستم.');
+    bot('تصویر جدید ثبت شد و دوباره بررسی می‌شه.');
+    openApplicationStatus();
+    return;
+  }
   driver('بله، همین تصویر.');
   if (nextImage()) {
     askPhoto();
@@ -1444,6 +1643,13 @@ function handleAction(action) {
   switch (command) {
     case 'continue-draft': continueDraft(); break;
     case 'reset-draft': resetDraft(); return;
+    case 'final-review': openFinalReview(); return;
+    case 'view-status':
+      correctingDocument = false;
+      pendingPhoto = null;
+      mode = 'submitted';
+      openApplicationStatus();
+      break;
     case 'task': chooseTask(key); break;
     case 'field': askField(fields.find(item => item.key === key), Boolean(answers[key])); break;
     case 'type':
@@ -1485,12 +1691,6 @@ function handleAction(action) {
       askPhoto();
       break;
     case 'keep': acceptPhoto(); break;
-    case 'submit':
-      submitted = true;
-      mode = 'submitted';
-      driver('ثبت‌نام رو برای بررسی می‌فرستم.');
-      bot('ارسال آزمایشی انجام شد. وضعیت ثبت‌نام روی این دستگاه ذخیره می‌شه.');
-      break;
   }
   render();
 }
@@ -1509,7 +1709,9 @@ async function startRegistration() {
   progressTrigger.disabled = false;
   if (restored) {
     showDraftStatus('پیش‌نویس روی دستگاه ذخیره شد');
-    bot('خوش برگشتی! می‌تونی ثبت‌نام قبلی رو ادامه بدی.');
+    refreshApplicationStatus();
+    bot(application && !correctingDocument ? 'خوش برگشتی! می‌تونی وضعیت درخواستت رو ببینی.' :
+      'خوش برگشتی! می‌تونی ثبت‌نام قبلی رو ادامه بدی.');
   } else {
     bot('سلام! به ثبت‌نام رانندگان تپسی خوش اومدی. با هم اطلاعات و مدارکت رو ثبت می‌کنیم.');
     bot('این نسخه آزمایشیه. می‌تونی با اطلاعات و تصویر نمونه امتحانش کنی. دوست داری از کدوم بخش شروع کنیم؟');
