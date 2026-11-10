@@ -338,6 +338,9 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 #join-chat .application-timeline li { display: flex; align-items: center; gap: 8px; }
 #join-chat .correction-item { margin-top: 14px; padding: 12px; border: 1px solid light-dark(#ead0a6, #705738); border-radius: 10px; }
 #join-chat .correction-item .send { margin-top: 12px; width: 100%; }
+#join-chat .application-actions { display: grid; gap: 8px; margin-top: 14px; }
+#join-chat .application-note { margin: 0 0 8px; font-size: 13px; line-height: 1.65; }
+#join-chat .review-photos .tool { text-align: start; }
 @media (min-width: 520px) and (min-height: 690px) {
   #join-chat { padding: 22px 12px; }
   #join-chat .device { height: min(820px, calc(100dvh - 44px)); box-shadow: 0 16px 50px #0002; }
@@ -440,7 +443,10 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
       <div class="sub">قبل از ارسال، اطلاعات و تصویر مدارکت رو بررسی کن.</div>
     </header>
     <div class="sheet-body application-body" data-final-review></div>
-    <footer class="application-footer"><button class="send" type="button" data-submit-application>ارسال برای بررسی</button></footer>
+    <footer class="application-footer">
+      <p class="application-note" data-review-note hidden></p>
+      <button class="send" type="button" data-submit-application>ارسال برای بررسی</button>
+    </footer>
   </dialog>
   <dialog class="sheet" id="application-status" aria-labelledby="application-status-title">
     <header class="sheet-header">
@@ -548,7 +554,8 @@ let previousMode = 'tasks';
 let editing = false;
 let pendingPhoto = null;
 let application = null;
-let correctingDocument = false;
+let applicationEditing = false;
+let replacement = null;
 let reviewTimer;
 const demoReviewDelay = 7000;
 const reviewLabels = { reviewing: 'در حال بررسی', correction: 'نیاز به اصلاح', rechecking: 'در حال بررسی مجدد', approved: 'تأیید شد' };
@@ -609,7 +616,7 @@ function saveDraft() {
   }]));
   writeDraft({
     version: 1, task, field: field?.key, mode: mode === 'welcome-back' ? savedMode : mode, previousMode, editing,
-    application, correctingDocument,
+    application, applicationEditing, replacement,
     answers, personalDrafts, licenseDraft, carDraft, documents: savedDocuments, pendingPhoto: photoData(pendingPhoto),
   }).then(() => showDraftStatus('پیش‌نویس روی دستگاه ذخیره شد'))
     .catch(() => showDraftStatus('ذخیره پیش‌نویس انجام نشد'));
@@ -633,7 +640,12 @@ function restoreDraft(draft) {
   editing = draft.editing;
   application = Object.hasOwn(reviewLabels, draft.application?.phase) ? draft.application :
     (draft.submitted ? newApplicationReview() : null);
-  correctingDocument = Boolean(draft.correctingDocument) && application?.phase === 'correction';
+  const legacyCorrection = Boolean(draft.correctingDocument) && application?.phase === 'correction';
+  applicationEditing = Boolean(application && (draft.applicationEditing || legacyCorrection));
+  replacement = draft.replacement || (legacyCorrection ? { key: 'license', side: application.flagSide } : null);
+  if (application && application.phase === 'correction' && !application.feedback) {
+    application.feedback = [{ kind: 'photo', edited: false }];
+  }
   previousMode = draft.previousMode;
   pendingPhoto = photoPreview(draft.pendingPhoto);
   savedMode = draft.mode;
@@ -647,13 +659,13 @@ function showRestoredPhotos(key) {
 }
 
 function continueDraft() {
-  if (application && !correctingDocument) {
+  if (application && !applicationEditing) {
     mode = 'submitted';
     openApplicationStatus();
     return;
   }
   mode = savedMode === 'tasks' ? previousMode : savedMode;
-  if (correctingDocument) {
+  if (replacement) {
     if (mode === 'photo' && pendingPhoto) previewPhoto(pendingPhoto);
     else askPhoto();
     return;
@@ -670,7 +682,10 @@ function continueDraft() {
 }
 
 function newApplicationReview() {
-  return { phase: 'reviewing', dueAt: Date.now() + demoReviewDelay, flagSide: documents.license.type === 'card' ? 'back' : 'single' };
+  return {
+    phase: 'reviewing', dueAt: Date.now() + demoReviewDelay, submittedAddress: answers.address,
+    flagSide: documents.license.type === 'card' ? 'back' : 'single', feedback: [],
+  };
 }
 
 function reviewValues(values) {
@@ -685,12 +700,15 @@ function reviewPhotos(key) {
     const label = escape(imageLabel(key, side));
     const preview = photo.url ? '<img src="' + escape(photo.url) + '" alt="' + label + '">' :
       '<div class="review-photo-placeholder">تصویر نمونه</div>';
-    return '<figure>' + preview + '<figcaption>' + label + '</figcaption></figure>';
+    return '<figure>' + preview + '<figcaption>' + label + '</figcaption>' +
+      '<button class="tool" type="button" data-replace-section="' + key + '" data-replace-side="' + side +
+      '" aria-label="جایگزینی ' + label + '">جایگزینی تصویر</button></figure>';
   }).join('') + '</div>';
 }
 
 function openFinalReview() {
-  if (application || !Object.keys(tasks).every(isComplete)) return;
+  if ((application && !applicationEditing) || !Object.keys(tasks).every(isComplete)) return;
+  finalReview.querySelector('#final-review-title').textContent = application ? 'مرور تغییرات ثبت‌نام' : 'مرور نهایی ثبت‌نام';
   const personal = Object.fromEntries(fields.map(item => [item.label, answers[item.key]]));
   finalReviewBody.innerHTML = Object.keys(tasks).map(key => {
     const edit = key === 'live' ? '' : '<button class="tool" type="button" data-edit-section="' + key + '">ویرایش</button>';
@@ -699,16 +717,31 @@ function openFinalReview() {
     return '<section class="review-card"><div class="review-card-heading"><h3>' + escape(titles(key)) + '</h3>' + edit +
       '</div>' + values + photos + '</section>';
   }).join('');
+  syncReviewSubmit();
   finalReview.showModal();
   finalReviewBody.scrollTop = 0;
+}
+
+function missingCorrections() {
+  return application?.phase === 'correction' ? application.feedback.filter(item => !item.edited).length : 0;
+}
+
+function syncReviewSubmit() {
+  const missing = missingCorrections();
+  const submit = finalReview.querySelector('[data-submit-application]');
+  const note = finalReview.querySelector('[data-review-note]');
+  submit.textContent = application ? 'ارسال مجدد برای بررسی' : 'ارسال برای بررسی';
+  submit.disabled = Boolean(missing);
+  note.hidden = !missing;
+  note.textContent = missing ? persian(missing) + ' مورد از بازخورد بررسی هنوز نیاز به اصلاح داره.' : '';
 }
 
 function renderApplicationStatus() {
   const { phase, flagSide } = application;
   const messages = {
     reviewing: 'درخواست ثبت‌نام دریافت شد. داریم مدارک رو بررسی می‌کنیم.',
-    correction: 'برای ادامه بررسی، فقط تصویر مشخص‌شده رو جایگزین کن.',
-    rechecking: 'تصویر جدید دریافت شد و در حال بررسیه.',
+    correction: 'بازخورد هر مورد رو ببین، اصلاحش کن و تغییرات رو برای بررسی بفرست.',
+    rechecking: 'تغییرات ثبت شد و دوباره بررسی می‌شه.',
     approved: 'بررسی آزمایشی ثبت‌نام با موفقیت انجام شد.',
   };
   const timeline = [
@@ -720,10 +753,20 @@ function renderApplicationStatus() {
     '</strong><p>' + messages[phase] + '</p></section><ul class="application-timeline">' +
     timeline.map(([label, done]) => '<li>' + marker(done) + label + '</li>').join('') + '</ul>';
   if (phase === 'correction') {
-    statusBody.insertAdjacentHTML('beforeend', '<section class="correction-item"><strong>' + escape(imageLabel('license', flagSide)) +
-      '</strong><p>نوشته‌های تصویر خوانا نیست. یه عکس واضح‌تر از همین بخش بفرست.</p>' +
-      '<button class="send" type="button" data-fix-document>اصلاح همین مدرک</button></section>');
+    const feedback = application.feedback.map(item => {
+      const isPhoto = item.kind === 'photo';
+      const label = isPhoto ? imageLabel('license', flagSide) : 'نشانی محل سکونت';
+      const reason = isPhoto ? 'نوشته‌های تصویر خوانا نیست. یه عکس واضح‌تر بفرست.' :
+        'نشانی ناقصه. نام خیابون و پلاک رو به نشانی اضافه کن.';
+      const edited = item.edited ? '<p>✓ تغییر ذخیره شد و آماده ارساله.</p>' : '';
+      return '<section class="correction-item"><strong>' + escape(label) + '</strong><p>' + reason + '</p>' + edited +
+        '<button class="send" type="button" data-fix-item="' + item.kind + '">' +
+        (isPhoto ? 'اصلاح همین مدرک' : 'اصلاح نشانی') + '</button></section>';
+    }).join('');
+    statusBody.insertAdjacentHTML('beforeend', feedback);
   }
+  statusBody.insertAdjacentHTML('beforeend', '<div class="application-actions"><button class="option" type="button" data-edit-application>' +
+    (applicationEditing ? 'مرور و ارسال مجدد' : 'ویرایش اطلاعات و مدارک') + '</button></div>');
 }
 
 function refreshApplicationStatus() {
@@ -735,11 +778,17 @@ function refreshApplicationStatus() {
     if (remaining > 0) reviewTimer = setTimeout(refreshApplicationStatus, remaining);
     else {
       application.phase = phase === 'reviewing' ? 'correction' : 'approved';
+      if (phase === 'reviewing') {
+        const original = application.submittedAddress ?? answers.address;
+        application.feedback = [{ kind: 'photo', edited: false },
+          { kind: 'address', original, edited: answers.address !== original }];
+      }
       saveDraft();
     }
   }
   progress.textContent = reviewLabels[application.phase];
   if (statusSheet.open) renderApplicationStatus();
+  if (finalReview.open) syncReviewSubmit();
 }
 
 function openApplicationStatus() {
@@ -749,17 +798,24 @@ function openApplicationStatus() {
   statusSheet.showModal();
 }
 
-function startDocumentCorrection() {
-  if (application?.phase !== 'correction') return;
-  statusSheet.close();
-  task = 'license';
-  correctingDocument = true;
+function startPhotoReplacement(key, side) {
+  if (!documents[key]?.images[side]) return;
+  if (finalReview.open) finalReview.close();
+  if (statusSheet.open) statusSheet.close();
+  task = key;
+  applicationEditing = Boolean(application);
+  replacement = { key, side };
   pendingPhoto = null;
   askPhoto();
   render();
 }
 
 finalReviewBody.addEventListener('click', event => {
+  const replace = event.target.closest('[data-replace-section]');
+  if (replace) {
+    startPhotoReplacement(replace.dataset.replaceSection, replace.dataset.replaceSide);
+    return;
+  }
   const edit = event.target.closest('[data-edit-section]');
   if (!edit) return;
   finalReview.close();
@@ -767,18 +823,42 @@ finalReviewBody.addEventListener('click', event => {
 });
 
 finalReview.querySelector('[data-submit-application]').addEventListener('click', () => {
-  if (application || !Object.keys(tasks).every(isComplete)) return;
+  if ((application && !applicationEditing) || missingCorrections() || !Object.keys(tasks).every(isComplete)) return;
   finalReview.close();
-  application = newApplicationReview();
+  const resubmitting = Boolean(application);
+  if (resubmitting) {
+    if (application.phase !== 'reviewing') application.phase = 'rechecking';
+    application.dueAt = Date.now() + demoReviewDelay;
+    application.submittedAddress = answers.address;
+  } else application = newApplicationReview();
+  applicationEditing = false;
+  replacement = null;
+  pendingPhoto = null;
   mode = 'submitted';
-  driver('ثبت‌نام رو برای بررسی می‌فرستم.');
-  bot('درخواست ثبت شد. نتیجه رو از وضعیت ثبت‌نام دنبال کن.');
+  driver(resubmitting ? 'تغییرات رو برای بررسی می‌فرستم.' : 'ثبت‌نام رو برای بررسی می‌فرستم.');
+  bot(resubmitting ? 'تغییرات ارسال شد. نتیجه رو از وضعیت ثبت‌نام دنبال کن.' :
+    'درخواست ثبت شد. نتیجه رو از وضعیت ثبت‌نام دنبال کن.');
   render();
   openApplicationStatus();
 });
 
 statusBody.addEventListener('click', event => {
-  if (event.target.closest('[data-fix-document]')) startDocumentCorrection();
+  const fix = event.target.closest('[data-fix-item]');
+  if (fix?.dataset.fixItem === 'photo') startPhotoReplacement('license', application.flagSide);
+  else if (fix?.dataset.fixItem === 'address') {
+    statusSheet.close();
+    applicationEditing = true;
+    askField(fields.find(item => item.key === 'address'), true);
+    render();
+  } else if (event.target.closest('[data-edit-application]')) {
+    statusSheet.close();
+    applicationEditing = true;
+    replacement = null;
+    pendingPhoto = null;
+    mode = 'done';
+    render();
+    openFinalReview();
+  }
 });
 
 async function resetDraft() {
@@ -887,6 +967,18 @@ function progressSteps(key) {
     { label: 'تأیید اطلاعات مدرک', filled: Boolean(details) }];
 }
 
+function missingDocumentFields(key) {
+  if ((key !== 'car' && key !== 'license') || isComplete(key) || !documents[key].type || nextImage(key)) return [];
+  const sample = sampleDetails[key];
+  if (key === 'license') return Object.entries({ ...sample, ...licenseDraft }).filter(([, value]) => !value.trim()).map(([label]) => label);
+  const carFields = { vehicle: 'نوع خودرو', year: 'مدل', color: 'رنگ', vin: 'شماره شاسی', owner: 'نام مالک', 'owner-id': 'کد ملی مالک' };
+  const missing = Object.entries(carFields).filter(([name, label]) => !(carDraft[name] ?? sample[label]).trim()).map(([, label]) => label);
+  const plate = carDraft['plate-type'] === 'other' ? ['plate-other'] : ['plate-first', 'plate-letter', 'plate-serial', 'plate-region'];
+  if (plate.some(name => Object.hasOwn(carDraft, name) && !carDraft[name].trim()) ||
+      (carDraft['plate-type'] === 'other' && !carDraft['plate-other']?.trim())) missing.unshift('پلاک');
+  return missing;
+}
+
 function openProgress() {
   if (application) {
     openApplicationStatus();
@@ -934,8 +1026,10 @@ function showProgressSection(key) {
     resume = '<button type="button" class="send progress-resume" data-action="task:' + key + '">' +
       (done ? 'مرور اطلاعات' : 'ادامه این بخش') + '</button>';
   }
+  const missing = missingDocumentFields(key);
+  const remaining = missing.length ? '<p class="application-note">موارد خالی · ' + missing.map(escape).join('، ') + '</p>' : '';
   progressSections.querySelector('#progress-detail').innerHTML = '<h3 id="progress-detail-title">' + escape(titles(key)) + '</h3>' +
-    '<ul class="progress-steps">' + chips + '</ul>' + resume;
+    '<ul class="progress-steps">' + chips + '</ul>' + remaining + resume;
   syncProgressActions();
 }
 
@@ -970,11 +1064,12 @@ function smallAction(label, action) {
 }
 
 function controls(personal = false) {
-  if (correctingDocument) return '<div class="tools">' + smallAction('بازگشت به وضعیت ثبت‌نام', 'view-status') + '</div>';
+  if (replacement) return '<div class="tools">' + smallAction('بازگشت به مرور اطلاعات', 'cancel-replacement') + '</div>';
   const extras = personal
     ? smallAction('این سؤال بمونه برای بعد', 'skip') + smallAction('انتخاب سؤال', 'fields')
     : '';
-  return '<div class="tools">' + extras + smallAction('تغییر بخش', 'tasks') + '</div>';
+  const applicationActions = applicationEditing ? smallAction('مرور تغییرات', 'final-review') + smallAction('وضعیت ثبت‌نام', 'view-status') : '';
+  return '<div class="tools">' + extras + smallAction('تغییر بخش', 'tasks') + applicationActions + '</div>';
 }
 
 function options(title, buttons) {
@@ -1054,6 +1149,7 @@ function inputForField() {
 
 function render(persist = true) {
   const complete = Object.keys(tasks).filter(isComplete).length;
+  const reviewAction = applicationEditing ? 'مرور و ارسال مجدد' : 'مرور و ارسال';
   progress.textContent = application ? reviewLabels[application.phase] : persian(complete) + ' از ۴ بخش';
   progressTrigger.querySelector('[data-progress-label]').textContent = application ? 'وضعیت ثبت‌نام' : 'پیشرفت ثبت‌نام';
   progressTrigger.setAttribute('aria-controls', application ? 'application-status' : 'registration-progress');
@@ -1062,7 +1158,7 @@ function render(persist = true) {
   if (isBotTyping) return;
   if (mode === 'welcome-back') {
     let label = application ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
-    if (correctingDocument) label = 'ادامه اصلاح مدرک';
+    if (applicationEditing || replacement) label = 'ادامه ویرایش ثبت‌نام';
     composer.innerHTML = options('ثبت‌نام قبلی روی این دستگاه ذخیره شده', option(label, 'continue-draft')) +
       '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
   } else if (mode === 'submitted') {
@@ -1070,7 +1166,7 @@ function render(persist = true) {
       '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
   } else if (mode === 'tasks') {
     const taskButtons = Object.entries(tasks).map(([key, [label]]) => option(label, 'task:' + key, taskStatus(key)));
-    if (complete === 4) taskButtons.unshift(option('مرور و ارسال', 'final-review'));
+    if (complete === 4) taskButtons.unshift(option(reviewAction, 'final-review'));
     composer.innerHTML = options('از کدوم بخش ادامه بدیم؟', taskButtons.join(''));
     if (task && previousMode !== 'tasks') {
       composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('برگشت به گفت‌وگو', 'resume') + '</div>');
@@ -1104,13 +1200,13 @@ function render(persist = true) {
       };
     });
   } else if (mode === 'photo') {
-    const keep = correctingDocument ? 'ارسال تصویر اصلاح‌شده' : 'بله، همین تصویر';
+    const keep = replacement ? 'ذخیره تصویر جایگزین' : 'بله، همین تصویر';
     composer.innerHTML = options('تصویر رو تأیید می‌کنی؟',
       option(keep, 'keep') + option('دوباره انتخاب می‌کنم', 'retake')) + controls();
   } else if (mode === 'review') {
     renderReview();
   } else {
-    const next = complete === 4 ? option('مرور و ارسال', 'final-review') + option('بازگشت به بخش‌ها', 'tasks') :
+    const next = complete === 4 ? option(reviewAction, 'final-review') + option('بازگشت به بخش‌ها', 'tasks') :
       option('بخش بعدی رو انتخاب می‌کنم', 'tasks');
     composer.innerHTML = options(complete === 4 ? 'همه بخش‌ها تکمیل شده' : 'ادامه ثبت‌نام', next);
   }
@@ -1126,6 +1222,7 @@ function render(persist = true) {
 
 function askField(item, edit = false) {
   if (task !== 'personal') pendingPhoto = null;
+  replacement = null;
   task = 'personal';
   field = item;
   editing = edit;
@@ -1157,6 +1254,8 @@ function submitAnswer(event) {
   }
   const answered = field;
   answers[answered.key] = value;
+  const feedback = application?.feedback?.find(item => item.kind === answered.key);
+  if (feedback && application.phase === 'correction') feedback.edited = value !== feedback.original;
   delete personalDrafts[answered.key];
   const visibleValue = answered.key === 'identity' ? '••••••' + value.slice(-4) : value;
   driver(visibleValue, { edit: () => { askField(answered, true); render(); } });
@@ -1182,7 +1281,7 @@ function imageKeys(key = task) {
 }
 
 function nextImage(key = task) {
-  if (correctingDocument && key === 'license') return application.flagSide;
+  if (replacement?.key === key) return replacement.side;
   return imageKeys(key).find(side => !documents[key].images[side]);
 }
 
@@ -1309,14 +1408,15 @@ function previewPhoto(photo) {
 function acceptPhoto() {
   documents[task].images[nextImage()] = pendingPhoto;
   pendingPhoto = null;
-  if (correctingDocument) {
-    correctingDocument = false;
-    application.phase = 'rechecking';
-    application.dueAt = Date.now() + demoReviewDelay;
-    mode = 'submitted';
-    driver('تصویر اصلاح‌شده رو می‌فرستم.');
-    bot('تصویر جدید ثبت شد و دوباره بررسی می‌شه.');
-    openApplicationStatus();
+  if (replacement) {
+    if (application?.phase === 'correction' && replacement.key === 'license' && replacement.side === application.flagSide) {
+      const feedback = application.feedback.find(item => item.kind === 'photo');
+      if (feedback) feedback.edited = true;
+    }
+    replacement = null;
+    mode = 'done';
+    driver('تصویر جایگزین رو تأیید می‌کنم.');
+    bot('تصویر جدید ذخیره شد. از مرور اطلاعات می‌تونی درخواستت رو بفرستی.');
     return;
   }
   driver('بله، همین تصویر.');
@@ -1614,7 +1714,8 @@ function titles(key) {
 }
 
 function chooseTask(key) {
-  if (key !== task) pendingPhoto = null;
+  if (key !== task || replacement) pendingPhoto = null;
+  replacement = null;
   task = key;
   showRestoredPhotos(key);
   driver(tasks[key][1]);
@@ -1644,12 +1745,14 @@ function handleAction(action) {
     case 'continue-draft': continueDraft(); break;
     case 'reset-draft': resetDraft(); return;
     case 'final-review': openFinalReview(); return;
-    case 'view-status':
-      correctingDocument = false;
+    case 'cancel-replacement':
+      replacement = null;
       pendingPhoto = null;
-      mode = 'submitted';
-      openApplicationStatus();
-      break;
+      mode = 'done';
+      render();
+      openFinalReview();
+      return;
+    case 'view-status': openApplicationStatus(); return;
     case 'task': chooseTask(key); break;
     case 'field': askField(fields.find(item => item.key === key), Boolean(answers[key])); break;
     case 'type':
@@ -1710,7 +1813,7 @@ async function startRegistration() {
   if (restored) {
     showDraftStatus('پیش‌نویس روی دستگاه ذخیره شد');
     refreshApplicationStatus();
-    bot(application && !correctingDocument ? 'خوش برگشتی! می‌تونی وضعیت درخواستت رو ببینی.' :
+    bot(application && !applicationEditing ? 'خوش برگشتی! می‌تونی وضعیت درخواستت رو ببینی.' :
       'خوش برگشتی! می‌تونی ثبت‌نام قبلی رو ادامه بدی.');
   } else {
     bot('سلام! به ثبت‌نام رانندگان تپسی خوش اومدی. با هم اطلاعات و مدارکت رو ثبت می‌کنیم.');
