@@ -91,6 +91,10 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
   font-size: 12px;
 }
 #join-chat .progress-trigger .sub { margin: 0; }
+#join-chat .progress-message { width: min(100%, 390px); max-width: 100%; white-space: normal; }
+#join-chat .progress-widget { margin-top: 8px; }
+#join-chat .progress-widget .progress-map { margin-block: 8px; }
+#join-chat .progress-widget .progress-card { padding: 8px; gap: 4px; }
 #join-chat .sheet {
   width: min(460px, calc(100% - 24px));
   max-height: min(680px, calc(100dvh - 24px));
@@ -359,11 +363,11 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
     <header class="app-header">
       <span class="mark" aria-hidden="true">ت</span>
       <div><div class="heading">همراه ثبت‌نام تپسی</div><div class="sub" data-draft-status role="status">نسخه آزمایشی</div></div>
-      <button class="progress-trigger" type="button" aria-haspopup="dialog" aria-controls="registration-progress">
+      <button class="progress-trigger" type="button" aria-controls="registration-chat-history">
         <span data-progress-label>پیشرفت ثبت‌نام</span><span class="sub" data-progress></span>
       </button>
     </header>
-    <div class="history" role="log" aria-label="پیام‌های گفت‌وگو"></div>
+    <div class="history" id="registration-chat-history" role="log" aria-label="پیام‌های گفت‌وگو"></div>
     <div class="composer" aria-label="پاسخ به پیام"></div>
   </section>
   <dialog class="sheet city-picker" aria-labelledby="city-picker-title">
@@ -375,16 +379,6 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
       <input class="city-search" type="search" aria-label="جست‌وجوی شهر یا محدوده" placeholder="نام شهر یا محدوده رو جست‌وجو کن" autocomplete="off" autofocus>
     </div>
     <div class="sheet-body city-results" aria-label="شهرها و محدوده‌های فعالیت"></div>
-  </dialog>
-  <dialog class="sheet progress-sheet" id="registration-progress" aria-labelledby="progress-title">
-    <div class="sheet-header">
-      <div class="sheet-heading">
-        <h2 id="progress-title">پیشرفت ثبت‌نام</h2>
-        <form method="dialog"><button class="tool" type="submit" autofocus>بستن</button></form>
-      </div>
-      <div class="sub" data-progress-summary></div>
-    </div>
-    <div class="sheet-body" data-progress-sections></div>
   </dialog>
   <dialog class="sheet camera-sheet" id="photo-camera" aria-labelledby="camera-title" aria-describedby="camera-hint">
     <header class="camera-header">
@@ -465,8 +459,7 @@ const app = document.querySelector('#join-chat');
 const history = app.querySelector('.history');
 const composer = app.querySelector('.composer');
 const progress = app.querySelector('[data-progress]');
-const progressSheet = app.querySelector('#registration-progress');
-const progressSections = progressSheet.querySelector('[data-progress-sections]');
+let progressWidgetCount = 0;
 const cityPicker = app.querySelector('.city-picker');
 const citySearch = cityPicker.querySelector('.city-search');
 const cityResults = cityPicker.querySelector('.city-results');
@@ -899,8 +892,19 @@ function addMessage(who, text, options = {}) {
     edit.addEventListener('click', options.edit);
     bubble.append(edit);
   }
+  if (options.progressWidget) {
+    bubble.classList.add('progress-message');
+    bubble.append(createProgressWidget());
+  }
   history.append(bubble);
-  history.scrollTop = history.scrollHeight;
+  scrollToLatestMessage();
+}
+
+function scrollToLatestMessage() {
+  const latest = history.lastElementChild;
+  if (latest?.classList.contains('progress-message') && latest.offsetHeight > history.clientHeight) {
+    history.scrollTop += latest.getBoundingClientRect().top - history.getBoundingClientRect().top;
+  } else history.scrollTop = history.scrollHeight;
 }
 
 function bot(text, options) {
@@ -909,6 +913,7 @@ function bot(text, options) {
   isBotTyping = true;
   composer.inert = true;
   history.querySelectorAll('button.editor').forEach(button => { button.disabled = true; });
+  history.querySelectorAll('.progress-widget button[data-action]').forEach(button => { button.disabled = true; });
   showNextBotMessage();
 }
 
@@ -979,14 +984,33 @@ function missingDocumentFields(key) {
   return missing;
 }
 
-function openProgress() {
-  if (application) {
-    openApplicationStatus();
-    return;
-  }
+function createProgressWidget() {
+  const widget = document.createElement('section');
+  widget.className = 'progress-widget';
+  widget.id = 'progress-widget-' + ++progressWidgetCount;
+  widget.setAttribute('aria-label', 'پیشرفت ثبت‌نام');
+  widget.addEventListener('click', event => {
+    const card = event.target.closest('button[data-section]');
+    if (card) {
+      showProgressSection(widget, card.dataset.section);
+      return;
+    }
+    const button = event.target.closest('button[data-action]');
+    if (!button || isBotTyping || application) return;
+    const [command, key] = button.dataset.action.split(':');
+    if (command === 'field' && mode === 'field' && key === field.key) return;
+    if (command === 'task' && key === task && ['doctype', 'upload', 'photo', 'review'].includes(mode)) return;
+    handleAction(button.dataset.action);
+  });
+  renderProgressWidget(widget);
+  return widget;
+}
+
+function renderProgressWidget(widget) {
   const keys = Object.keys(tasks);
+  const selected = widget.querySelector('button[aria-pressed="true"]')?.dataset.section;
   const complete = keys.filter(isComplete).length;
-  progressSheet.querySelector('[data-progress-summary]').textContent = persian(complete) + ' از ۴ بخش تکمیل شده';
+  const detailId = widget.id + '-detail';
   const cards = keys.map(key => {
     const steps = progressSteps(key);
     const filled = steps.filter(step => step.filled).length;
@@ -997,19 +1021,18 @@ function openProgress() {
       ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + progressIcons[key] + '</svg>';
     const track = steps.map(step => '<span' + (step.filled ? ' data-filled' : '') + '></span>').join('');
     const check = isComplete(key) ? '<span class="progress-check" data-filled aria-hidden="true">✓</span>' : '';
-    return '<button type="button" class="progress-card" data-section="' + key + '" aria-pressed="false" aria-controls="progress-detail">' +
+    return '<button type="button" class="progress-card" data-section="' + key + '" aria-pressed="false" aria-controls="' + detailId + '">' +
       '<span class="progress-card-top">' + icon + check + '</span><span class="progress-card-title">' + escape(titles(key)) + '</span>' +
       '<span class="progress-track" aria-hidden="true">' + track + '</span><span class="progress-caption">' + status + '</span></button>';
   }).join('');
-  progressSections.innerHTML = '<div class="progress-map" role="group" aria-label="بخش‌های ثبت‌نام">' + cards + '</div>' +
-    '<section class="progress-detail" id="progress-detail" aria-labelledby="progress-detail-title"></section>';
-  showProgressSection(task || keys.find(key => !isComplete(key)) || keys[0]);
-  progressSections.scrollTop = 0;
-  progressSheet.showModal();
+  widget.innerHTML = '<div class="sub">' + persian(complete) + ' از ۴ بخش تکمیل شده</div>' +
+    '<div class="progress-map" role="group" aria-label="بخش‌های ثبت‌نام">' + cards + '</div>' +
+    '<section class="progress-detail" id="' + detailId + '" aria-labelledby="' + detailId + '-title"></section>';
+  showProgressSection(widget, selected || task || keys.find(key => !isComplete(key)) || keys[0]);
 }
 
-function showProgressSection(key) {
-  progressSections.querySelectorAll('button[data-section]').forEach(card => {
+function showProgressSection(widget, key) {
+  widget.querySelectorAll('button[data-section]').forEach(card => {
     card.setAttribute('aria-pressed', String(card.dataset.section === key));
   });
   const chips = progressSteps(key).map(({ label, filled, action }) => {
@@ -1028,30 +1051,19 @@ function showProgressSection(key) {
   }
   const missing = missingDocumentFields(key);
   const remaining = missing.length ? '<p class="application-note">موارد خالی · ' + missing.map(escape).join('، ') + '</p>' : '';
-  progressSections.querySelector('#progress-detail').innerHTML = '<h3 id="progress-detail-title">' + escape(titles(key)) + '</h3>' +
+  widget.querySelector('.progress-detail').innerHTML = '<h3 id="' + widget.id + '-detail-title">' + escape(titles(key)) + '</h3>' +
     '<ul class="progress-steps">' + chips + '</ul>' + remaining + resume;
-  syncProgressActions();
-}
-
-function syncProgressActions() {
-  progressSections.querySelectorAll('button[data-action]').forEach(button => { button.disabled = isBotTyping; });
+  widget.querySelectorAll('button[data-action]').forEach(button => { button.disabled = isBotTyping || Boolean(application); });
 }
 
 const progressTrigger = app.querySelector('.progress-trigger');
-progressTrigger.addEventListener('click', openProgress);
-progressSections.addEventListener('click', event => {
-  const card = event.target.closest('button[data-section]');
-  if (card) {
-    showProgressSection(card.dataset.section);
+progressTrigger.addEventListener('click', () => {
+  if (application) {
+    openApplicationStatus();
     return;
   }
-  const button = event.target.closest('button[data-action]');
-  if (!button || isBotTyping) return;
-  progressSheet.close();
-  const [command, key] = button.dataset.action.split(':');
-  if (command === 'field' && mode === 'field' && key === field.key) return;
-  if (command === 'task' && key === task && ['doctype', 'upload', 'photo', 'review'].includes(mode)) return;
-  handleAction(button.dataset.action);
+  driver('بهم بگو کدوم مدارک رو پر کردم');
+  bot('اینجا می‌تونی ببینی چه چیزهایی ثبت شده و چه چیزهایی هنوز باقی مونده.', { progressWidget: true });
 });
 
 function option(label, action, status = '') {
@@ -1125,23 +1137,13 @@ function openCityPicker() {
 citySearch.addEventListener('input', renderCityResults);
 cityResults.addEventListener('click', event => {
   const result = event.target.closest('button[data-city]');
-  if (!result) return;
-  const form = composer.querySelector('form');
-  const city = result.dataset.city;
-  form.querySelector('#answer').value = city;
-  form.querySelector('#choose-city').textContent = city;
-  form.querySelector('button[type=submit]').disabled = false;
-  personalDrafts.city = city;
-  saveDraft();
+  if (!result || mode !== 'field' || field.key !== 'city' || isBotTyping) return;
   cityPicker.close();
+  commitAnswer(result.dataset.city);
 });
 
 function inputForField() {
   const value = personalDrafts[field.key] ?? answers[field.key] ?? '';
-  if (field.key === 'city') {
-    return '<button id="choose-city" class="option city-trigger" type="button" aria-haspopup="dialog">' +
-      escape(value || 'جست‌وجو و انتخاب شهر') + '</button><input id="answer" type="hidden" value="' + escape(value) + '">';
-  }
   if (field.key === 'address') return '<textarea id="answer" rows="2" required>' + escape(value) + '</textarea>';
   const numeric = field.key === 'identity' ? ' inputmode="numeric" maxlength="10"' : '';
   return '<input id="answer" required' + numeric + ' value="' + escape(value) + '" autocomplete="off">';
@@ -1152,10 +1154,12 @@ function render(persist = true) {
   const reviewAction = applicationEditing ? 'مرور و ارسال مجدد' : 'مرور و ارسال';
   progress.textContent = application ? reviewLabels[application.phase] : persian(complete) + ' از ۴ بخش';
   progressTrigger.querySelector('[data-progress-label]').textContent = application ? 'وضعیت ثبت‌نام' : 'پیشرفت ثبت‌نام';
-  progressTrigger.setAttribute('aria-controls', application ? 'application-status' : 'registration-progress');
+  progressTrigger.setAttribute('aria-controls', application ? 'application-status' : 'registration-chat-history');
+  if (application) progressTrigger.setAttribute('aria-haspopup', 'dialog');
+  else progressTrigger.removeAttribute('aria-haspopup');
   if (persist) saveDraft();
-  if (progressSheet.open) syncProgressActions();
   if (isBotTyping) return;
+  history.querySelectorAll('.progress-widget').forEach(renderProgressWidget);
   if (mode === 'welcome-back') {
     let label = application ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
     if (applicationEditing || replacement) label = 'ادامه ویرایش ثبت‌نام';
@@ -1172,15 +1176,15 @@ function render(persist = true) {
       composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('برگشت به گفت‌وگو', 'resume') + '</div>');
     }
     if (task) composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>');
+  } else if (mode === 'field' && field.key === 'city') {
+    composer.innerHTML = '<label for="choose-city">' + field.label + '</label>' +
+      '<button id="choose-city" class="option city-trigger" type="button" aria-haspopup="dialog">جست‌وجو و انتخاب شهر</button>' + controls(true);
+    composer.querySelector('#choose-city').onclick = openCityPicker;
   } else if (mode === 'field') {
-    const isCity = field.key === 'city';
-    const labelTarget = isCity ? 'choose-city' : 'answer';
-    const disabled = isCity && !(personalDrafts.city ?? answers.city) ? ' disabled' : '';
-    composer.innerHTML = '<form><label for="' + labelTarget + '">' + field.label + '</label><div class="entry">' +
-      inputForField() + '<button class="send" type="submit"' + disabled + '>ارسال</button></div><div class="error" role="alert"></div></form>' +
+    composer.innerHTML = '<form><label for="answer">' + field.label + '</label><div class="entry">' +
+      inputForField() + '<button class="send" type="submit">ارسال</button></div><div class="error" role="alert"></div></form>' +
       controls(true);
     composer.querySelector('form').onsubmit = submitAnswer;
-    if (isCity) composer.querySelector('#choose-city').onclick = openCityPicker;
   } else if (mode === 'fields') {
     const buttons = fields.map(item => option(item.label, 'field:' + item.key, answers[item.key] ? 'ثبت شده ✓' : ''));
     composer.innerHTML = options('کدوم مورد رو ثبت یا ویرایش کنیم؟', buttons.join('')) + controls();
@@ -1213,7 +1217,7 @@ function render(persist = true) {
   composer.querySelectorAll('[data-action]').forEach(button => {
     button.onclick = () => handleAction(button.dataset.action);
   });
-  history.scrollTop = history.scrollHeight;
+  scrollToLatestMessage();
   if (openCarReviewAfterReply && task === 'car' && mode === 'review') {
     openCarReviewAfterReply = false;
     openCarReview();
@@ -1242,7 +1246,11 @@ function nextField() {
 
 function submitAnswer(event) {
   event.preventDefault();
-  let value = composer.querySelector('#answer').value.trim();
+  commitAnswer(composer.querySelector('#answer').value);
+}
+
+function commitAnswer(answer) {
+  let value = answer.trim();
   if (!value) return;
   if (field.key === 'identity') {
     value = value.replace(/[۰-۹]/g, digit => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
