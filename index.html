@@ -460,6 +460,7 @@ const history = app.querySelector('.history');
 const composer = app.querySelector('.composer');
 const progress = app.querySelector('[data-progress]');
 let progressWidgetCount = 0;
+let showingProgress = false;
 const cityPicker = app.querySelector('.city-picker');
 const citySearch = cityPicker.querySelector('.city-search');
 const cityResults = cityPicker.querySelector('.city-results');
@@ -998,8 +999,12 @@ function createProgressWidget() {
     const button = event.target.closest('button[data-action]');
     if (!button || isBotTyping || application) return;
     const [command, key] = button.dataset.action.split(':');
-    if (command === 'field' && mode === 'field' && key === field.key) return;
-    if (command === 'task' && key === task && ['doctype', 'upload', 'photo', 'review'].includes(mode)) return;
+    const isCurrentField = command === 'field' && mode === 'field' && key === field.key;
+    const isCurrentTask = command === 'task' && key === task && ['doctype', 'upload', 'photo', 'review'].includes(mode);
+    if (isCurrentField || isCurrentTask) {
+      if (showingProgress) handleAction('return-from-progress');
+      return;
+    }
     handleAction(button.dataset.action);
   });
   renderProgressWidget(widget);
@@ -1062,6 +1067,7 @@ progressTrigger.addEventListener('click', () => {
     openApplicationStatus();
     return;
   }
+  showingProgress = true;
   driver('بهم بگو کدوم مدارک رو پر کردم');
   bot('اینجا می‌تونی ببینی چه چیزهایی ثبت شده و چه چیزهایی هنوز باقی مونده.', { progressWidget: true });
 });
@@ -1160,7 +1166,10 @@ function render(persist = true) {
   if (persist) saveDraft();
   if (isBotTyping) return;
   history.querySelectorAll('.progress-widget').forEach(renderProgressWidget);
-  if (mode === 'welcome-back') {
+  if (showingProgress) {
+    const back = mode === 'field' ? 'بازگشت به ' + field.label : 'بازگشت به مرحله قبلی';
+    composer.innerHTML = options('برای ادامه، یه مورد رو از کارت پیشرفت انتخاب کن.', option(back, 'return-from-progress'));
+  } else if (mode === 'welcome-back') {
     let label = application ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
     if (applicationEditing || replacement) label = 'ادامه ویرایش ثبت‌نام';
     composer.innerHTML = options('ثبت‌نام قبلی روی این دستگاه ذخیره شده', option(label, 'continue-draft')) +
@@ -1218,13 +1227,14 @@ function render(persist = true) {
     button.onclick = () => handleAction(button.dataset.action);
   });
   scrollToLatestMessage();
-  if (openCarReviewAfterReply && task === 'car' && mode === 'review') {
+  if (!showingProgress && openCarReviewAfterReply && task === 'car' && mode === 'review') {
     openCarReviewAfterReply = false;
     openCarReview();
   }
 }
 
 function askField(item, edit = false) {
+  showingProgress = false;
   if (task !== 'personal') pendingPhoto = null;
   replacement = null;
   task = 'personal';
@@ -1749,7 +1759,12 @@ function chooseTask(key) {
 
 function handleAction(action) {
   const [command, key] = action.split(':');
+  showingProgress = false;
   switch (command) {
+    case 'return-from-progress':
+      if (mode === 'field') bot(editing ? field.label + ' رو دوباره بفرست.' : field.question);
+      else bot('برگردیم به مرحله قبلی ثبت‌نام.');
+      break;
     case 'continue-draft': continueDraft(); break;
     case 'reset-draft': resetDraft(); return;
     case 'final-review': openFinalReview(); return;
