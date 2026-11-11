@@ -95,6 +95,12 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 #join-chat .progress-widget { margin-top: 8px; }
 #join-chat .progress-widget .progress-map { margin-block: 8px; }
 #join-chat .progress-widget .progress-card { padding: 8px; gap: 4px; }
+#join-chat .progress-controls { display: grid; gap: 8px; }
+#join-chat .progress-controls label { margin: 0; }
+#join-chat .progress-controls .tools { margin: 0; }
+#join-chat .progress-field-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#join-chat .progress-field-actions .option { padding-inline: 9px; }
+#join-chat .progress-field-actions .option-status:empty { display: none; }
 #join-chat .sheet {
   width: min(460px, calc(100% - 24px));
   max-height: min(680px, calc(100dvh - 24px));
@@ -125,12 +131,11 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
   border-radius: 16px;
   background: var(--card-fill);
   text-align: start;
-  cursor: pointer;
 }
 #join-chat .progress-card[data-section="license"] { --card-ink: light-dark(#89501e, #f2c798); --card-fill: light-dark(#fff3e5, #423328); }
 #join-chat .progress-card[data-section="car"] { --card-ink: light-dark(#315a89, #b7d4fb); --card-fill: light-dark(#eaf2ff, #28394d); }
 #join-chat .progress-card[data-section="live"] { --card-ink: light-dark(#68458b, #e1c2fb); --card-fill: light-dark(#f4eefa, #3d3048); }
-#join-chat .progress-card[aria-pressed="true"] { border-color: var(--card-ink); }
+#join-chat .progress-card[data-selected] { border-color: var(--card-ink); }
 #join-chat .progress-card-top { display: flex; align-items: center; justify-content: space-between; min-height: 28px; }
 #join-chat .progress-icon { width: 26px; height: 26px; color: var(--card-ink); }
 #join-chat .progress-card-title { font-size: 14px; font-weight: 600; }
@@ -157,7 +162,6 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
   text-align: start;
   font-size: 13px;
 }
-#join-chat button.progress-step { cursor: pointer; }
 #join-chat .progress-step[data-filled] { border-style: solid; border-color: transparent; background: light-dark(#e1f2e7, #30483a); }
 #join-chat .progress-check {
   display: inline-grid;
@@ -172,7 +176,6 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 }
 #join-chat .progress-check[data-filled] { border-color: transparent; background: light-dark(#286146, #b1e5c1); color: light-dark(#fff, #203529); }
 #join-chat .progress-status-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-#join-chat .progress-resume { width: 100%; margin-top: 12px; }
 #join-chat .city-result {
   display: block;
   width: 100%;
@@ -460,6 +463,7 @@ const history = app.querySelector('.history');
 const composer = app.querySelector('.composer');
 const progress = app.querySelector('[data-progress]');
 let progressWidgetCount = 0;
+let activeProgressWidget = null;
 let showingProgress = false;
 const cityPicker = app.querySelector('.city-picker');
 const citySearch = cityPicker.querySelector('.city-search');
@@ -895,7 +899,8 @@ function addMessage(who, text, options = {}) {
   }
   if (options.progressWidget) {
     bubble.classList.add('progress-message');
-    bubble.append(createProgressWidget());
+    activeProgressWidget = createProgressWidget();
+    bubble.append(activeProgressWidget);
   }
   history.append(bubble);
   scrollToLatestMessage();
@@ -914,7 +919,6 @@ function bot(text, options) {
   isBotTyping = true;
   composer.inert = true;
   history.querySelectorAll('button.editor').forEach(button => { button.disabled = true; });
-  history.querySelectorAll('.progress-widget button[data-action]').forEach(button => { button.disabled = true; });
   showNextBotMessage();
 }
 
@@ -961,7 +965,7 @@ function taskStatus(key) {
 
 function progressSteps(key) {
   if (key === 'personal') {
-    return fields.map(item => ({ label: item.label, filled: Boolean(answers[item.key]), action: 'field:' + item.key }));
+    return fields.map(item => ({ label: item.label, filled: Boolean(answers[item.key]) }));
   }
   const { images, type, details } = documents[key];
   if (key === 'live') return [{ label: 'عکس زنده چهره', filled: Boolean(images.face) }];
@@ -989,31 +993,15 @@ function createProgressWidget() {
   const widget = document.createElement('section');
   widget.className = 'progress-widget';
   widget.id = 'progress-widget-' + ++progressWidgetCount;
+  widget.dataset.section = task || Object.keys(tasks).find(key => !isComplete(key)) || 'personal';
   widget.setAttribute('aria-label', 'پیشرفت ثبت‌نام');
-  widget.addEventListener('click', event => {
-    const card = event.target.closest('button[data-section]');
-    if (card) {
-      showProgressSection(widget, card.dataset.section);
-      return;
-    }
-    const button = event.target.closest('button[data-action]');
-    if (!button || isBotTyping || application) return;
-    const [command, key] = button.dataset.action.split(':');
-    const isCurrentField = command === 'field' && mode === 'field' && key === field.key;
-    const isCurrentTask = command === 'task' && key === task && ['doctype', 'upload', 'photo', 'review'].includes(mode);
-    if (isCurrentField || isCurrentTask) {
-      if (showingProgress) handleAction('return-from-progress');
-      return;
-    }
-    handleAction(button.dataset.action);
-  });
   renderProgressWidget(widget);
   return widget;
 }
 
 function renderProgressWidget(widget) {
   const keys = Object.keys(tasks);
-  const selected = widget.querySelector('button[aria-pressed="true"]')?.dataset.section;
+  const selected = widget.dataset.section;
   const complete = keys.filter(isComplete).length;
   const detailId = widget.id + '-detail';
   const cards = keys.map(key => {
@@ -1026,39 +1014,23 @@ function renderProgressWidget(widget) {
       ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + progressIcons[key] + '</svg>';
     const track = steps.map(step => '<span' + (step.filled ? ' data-filled' : '') + '></span>').join('');
     const check = isComplete(key) ? '<span class="progress-check" data-filled aria-hidden="true">✓</span>' : '';
-    return '<button type="button" class="progress-card" data-section="' + key + '" aria-pressed="false" aria-controls="' + detailId + '">' +
+    return '<div class="progress-card" data-section="' + key + '"' + (key === selected ? ' data-selected' : '') + '>' +
       '<span class="progress-card-top">' + icon + check + '</span><span class="progress-card-title">' + escape(titles(key)) + '</span>' +
-      '<span class="progress-track" aria-hidden="true">' + track + '</span><span class="progress-caption">' + status + '</span></button>';
+      '<span class="progress-track" aria-hidden="true">' + track + '</span><span class="progress-caption">' + status + '</span></div>';
   }).join('');
+  const chips = progressSteps(selected).map(({ label, filled }) => {
+    const status = filled ? 'ثبت شده' : 'باقی مانده';
+    const marker = '<span class="progress-check"' + (filled ? ' data-filled' : '') + ' aria-hidden="true">' + (filled ? '✓' : '') + '</span>';
+    return '<li><span class="progress-step"' + (filled ? ' data-filled' : '') + '>' +
+      marker + escape(label) + '<span class="progress-status-text">، ' + status + '</span></span></li>';
+  }).join('');
+  const missing = missingDocumentFields(selected);
+  const remaining = missing.length ? '<p class="application-note">موارد خالی · ' + missing.map(escape).join('، ') + '</p>' : '';
   widget.innerHTML = '<div class="sub">' + persian(complete) + ' از ۴ بخش تکمیل شده</div>' +
     '<div class="progress-map" role="group" aria-label="بخش‌های ثبت‌نام">' + cards + '</div>' +
-    '<section class="progress-detail" id="' + detailId + '" aria-labelledby="' + detailId + '-title"></section>';
-  showProgressSection(widget, selected || task || keys.find(key => !isComplete(key)) || keys[0]);
-}
-
-function showProgressSection(widget, key) {
-  widget.querySelectorAll('button[data-section]').forEach(card => {
-    card.setAttribute('aria-pressed', String(card.dataset.section === key));
-  });
-  const chips = progressSteps(key).map(({ label, filled, action }) => {
-    const status = filled ? 'ثبت شده' : 'باقی مانده';
-    const attributes = 'class="progress-step"' + (filled ? ' data-filled' : '');
-    const marker = '<span class="progress-check"' + (filled ? ' data-filled' : '') + ' aria-hidden="true">' + (filled ? '✓' : '') + '</span>';
-    const content = marker + escape(label) + '<span class="progress-status-text">، ' + status + '</span>';
-    if (!action) return '<li><span ' + attributes + '>' + content + '</span></li>';
-    return '<li><button type="button" ' + attributes + ' data-action="' + action + '">' + content + '</button></li>';
-  }).join('');
-  const done = isComplete(key);
-  let resume = '';
-  if (key !== 'personal' && !(key === 'live' && done)) {
-    resume = '<button type="button" class="send progress-resume" data-action="task:' + key + '">' +
-      (done ? 'مرور اطلاعات' : 'ادامه این بخش') + '</button>';
-  }
-  const missing = missingDocumentFields(key);
-  const remaining = missing.length ? '<p class="application-note">موارد خالی · ' + missing.map(escape).join('، ') + '</p>' : '';
-  widget.querySelector('.progress-detail').innerHTML = '<h3 id="' + widget.id + '-detail-title">' + escape(titles(key)) + '</h3>' +
-    '<ul class="progress-steps">' + chips + '</ul>' + remaining + resume;
-  widget.querySelectorAll('button[data-action]').forEach(button => { button.disabled = isBotTyping || Boolean(application); });
+    '<section class="progress-detail" id="' + detailId + '" aria-labelledby="' + detailId + '-title">' +
+    '<h3 id="' + detailId + '-title">' + escape(titles(selected)) + '</h3>' +
+    '<ul class="progress-steps">' + chips + '</ul>' + remaining + '</section>';
 }
 
 const progressTrigger = app.querySelector('.progress-trigger');
@@ -1092,6 +1064,29 @@ function controls(personal = false) {
 
 function options(title, buttons) {
   return '<div class="composer-title">' + escape(title) + '</div><div class="options">' + buttons + '</div>';
+}
+
+function renderProgressControls(widget) {
+  const selected = widget.dataset.section;
+  const sections = Object.keys(tasks).map(key =>
+    '<option value="' + key + '"' + (key === selected ? ' selected' : '') + '>' + escape(titles(key)) + '</option>'
+  ).join('');
+  let actions = '';
+  if (selected === 'personal') {
+    const fieldsToOpen = fields.map(item => option(item.label, 'field:' + item.key)).join('');
+    actions = '<div class="options progress-field-actions">' + fieldsToOpen + '</div>';
+  } else if (selected !== 'live' || !isComplete(selected)) {
+    actions = option(isComplete(selected) ? 'مرور اطلاعات' : 'ادامه این بخش', 'task:' + selected);
+  }
+  const back = mode === 'field' ? 'بازگشت به ' + field.label : 'بازگشت به مرحله قبلی';
+  composer.innerHTML = '<div class="progress-controls"><label for="progress-section">بخش ثبت‌نام</label>' +
+    '<select id="progress-section" aria-controls="' + widget.id + '-detail">' + sections + '</select>' +
+    actions + '<div class="tools">' + smallAction(back, 'return-from-progress') + '</div></div>';
+  composer.querySelector('#progress-section').onchange = event => {
+    widget.dataset.section = event.currentTarget.value;
+    render(false);
+    composer.querySelector('#progress-section').focus({ preventScroll: true });
+  };
 }
 
 function normalizeCityName(name) {
@@ -1167,8 +1162,7 @@ function render(persist = true) {
   if (isBotTyping) return;
   history.querySelectorAll('.progress-widget').forEach(renderProgressWidget);
   if (showingProgress) {
-    const back = mode === 'field' ? 'بازگشت به ' + field.label : 'بازگشت به مرحله قبلی';
-    composer.innerHTML = options('برای ادامه، یه مورد رو از کارت پیشرفت انتخاب کن.', option(back, 'return-from-progress'));
+    renderProgressControls(activeProgressWidget);
   } else if (mode === 'welcome-back') {
     let label = application ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
     if (applicationEditing || replacement) label = 'ادامه ویرایش ثبت‌نام';
@@ -1758,7 +1752,12 @@ function chooseTask(key) {
 }
 
 function handleAction(action) {
-  const [command, key] = action.split(':');
+  let [command, key] = action.split(':');
+  if (showingProgress) {
+    const isCurrentField = command === 'field' && mode === 'field' && key === field.key;
+    const isCurrentTask = command === 'task' && key === task && ['doctype', 'upload', 'photo', 'review'].includes(mode);
+    if (isCurrentField || isCurrentTask) command = 'return-from-progress';
+  }
   showingProgress = false;
   switch (command) {
     case 'return-from-progress':
