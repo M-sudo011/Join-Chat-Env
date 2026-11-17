@@ -1086,15 +1086,12 @@ function smallAction(label, action) {
   return '<button class="tool" type="button" data-action="' + action + '">' + escape(label) + '</button>';
 }
 
-function controls(personal = false) {
+function controls() {
   if (replacement) return '<div class="tools">' + smallAction('بازگشت به مرور اطلاعات', 'cancel-replacement') + '</div>';
-  const extras = personal
-    ? smallAction('انتخاب سؤال', 'fields')
-    : '';
   const documentBack = task !== 'live' && ['upload', 'photo'].includes(mode)
     ? smallAction('بازگشت به انتخاب نوع مدرک', 'back-to-document-type') : '';
   const applicationActions = applicationEditing ? smallAction('مرور تغییرات', 'final-review') + smallAction('وضعیت ثبت‌نام', 'view-status') : '';
-  return '<div class="tools">' + extras + documentBack + smallAction('تغییر بخش', 'tasks') + applicationActions + '</div>';
+  return '<div class="tools">' + documentBack + smallAction('تغییر بخش', 'tasks') + applicationActions + '</div>';
 }
 
 function options(title, buttons, layout = '') {
@@ -1228,13 +1225,13 @@ function render(persist = true) {
     if (task) suggestions.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>');
   } else if (mode === 'field' && field.key === 'city') {
     suggestions.innerHTML = options('', '<button id="choose-city" class="option" type="button" aria-haspopup="dialog">' +
-      'جست‌وجو و انتخاب شهر</button>' + option('این سؤال بمونه برای بعد', 'skip')) + controls(true);
+      'جست‌وجو و انتخاب شهر</button>') + controls();
     suggestions.querySelector('#choose-city').onclick = openCityPicker;
   } else if (mode === 'field') {
     composer.innerHTML = '<form><div class="entry">' + inputForField() +
       '<button class="send" type="submit">ارسال</button></div><div class="error" role="alert"></div></form>';
     composer.querySelector('form').onsubmit = submitAnswer;
-    suggestions.innerHTML = options('', option('این سؤال بمونه برای بعد', 'skip')) + controls(true);
+    suggestions.innerHTML = controls();
   } else if (mode === 'fields') {
     const buttons = fields.map(item => option(item.label, 'field:' + item.key, answers[item.key] ? 'ثبت شده ✓' : ''));
     suggestions.innerHTML = options('کدوم مورد رو ثبت یا ویرایش کنیم؟', buttons.join('')) + controls();
@@ -1882,24 +1879,8 @@ function handleAction(action) {
       mode = 'tasks';
       break;
     case 'resume': mode = previousMode; break;
-    case 'fields':
-      driver('می‌خوام یه سؤال دیگه رو انتخاب کنم.');
-      mode = 'fields';
-      break;
     case 'car-review': openCarReview(); return;
     case 'license-review': openLicenseReview(); return;
-    case 'skip': {
-      driver('این مورد بمونه برای بعد.');
-      const index = fields.indexOf(field);
-      const remaining = [...fields.slice(index + 1), ...fields.slice(0, index)];
-      const next = remaining.find(item => !answers[item.key]);
-      if (next) askField(next);
-      else {
-        bot('باشه، هر وقت آماده بودی برمی‌گردیم سراغش.');
-        mode = 'tasks';
-      }
-      break;
-    }
     case 'camera':
       openCamera();
       return;
