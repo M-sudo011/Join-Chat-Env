@@ -6,14 +6,15 @@
 <meta name="robots" content="noindex">
 <title>همراه ثبت‌نام تپسی</title>
 <style>
-#join-chat{padding:18px 8px;color-scheme:light dark;font-family:Tahoma,Arial,sans-serif}
+#join-chat{color-scheme:light dark;font-family:Tahoma,"Noto Sans Arabic",Arial,sans-serif}
 #join-chat *{box-sizing:border-box}
 #join-chat .device{max-width:400px;margin:auto;overflow:hidden;border:1px solid light-dark(#ddd,#484848);border-radius:22px;background:light-dark(#fff,#191b1c);color:light-dark(#252726,#f0f0ed)}
 #join-chat .app-header{display:flex;gap:12px;align-items:center;padding:19px 18px;border-bottom:1px solid light-dark(#ededeb,#363a3b);background:light-dark(#fff,#202324)}
 #join-chat .mark{width:35px;height:35px;display:grid;place-items:center;border-radius:12px;background:light-dark(#fff0e9,#4a3024);color:light-dark(#b2380b,#ffb294);font-size:18px;font-weight:500}
 #join-chat .heading{font-size:14px;font-weight:500}
 #join-chat .sub{font-size:11px;color:light-dark(#686d69,#b3b9b5);margin-top:3px}
-#join-chat .history{display:flex;flex-direction:column;gap:15px;padding:23px 15px 24px;min-height:300px;justify-content:flex-end}
+#join-chat .history{padding:22px 16px 18px;overscroll-behavior:contain;background:light-dark(#fdfcf9,#191b1c)}
+#join-chat .transcript{display:flex;flex-direction:column;gap:13px}
 #join-chat .message{max-width:88%;padding:12px 14px;font-size:13px;line-height:1.95;overflow-wrap:anywhere;white-space:pre-wrap}
 #join-chat .assistant{align-self:flex-end;background:light-dark(#f0f1ef,#303534);border-radius:15px 15px 15px 4px}
 #join-chat .typing { display: flex; direction: ltr; align-items: center; gap: 5px; min-height: 43px; }
@@ -26,7 +27,6 @@
 }
 #join-chat .typing span:nth-child(2) { animation-delay: 120ms; }
 #join-chat .typing span:nth-child(3) { animation-delay: 240ms; }
-#join-chat .composer[inert] > * { visibility: hidden; }
 @keyframes typing-dot {
   0%, 65%, 100% { opacity: .45; transform: translateY(0); }
   30% { opacity: 1; transform: translateY(-3px); }
@@ -40,8 +40,8 @@
 #join-chat button{font:inherit;color:inherit}
 #join-chat .link{border:0;padding:6px 2px;background:transparent;font-size:11px;text-decoration:underline;text-underline-offset:3px;min-height:30px}
 #join-chat .older{align-self:center;border:0;background:transparent;font-size:11px;color:light-dark(#606762,#c0c6c1);padding:8px}
-#join-chat .composer{background:light-dark(#f5f6f4,#232827);padding:16px;border-top:1px solid light-dark(#e6e9e5,#3f4542)}
-#join-chat .composer-title{font-size:12px;margin-bottom:12px;color:light-dark(#515a53,#c4cec6)}
+#join-chat .composer{background:light-dark(#fff,#232827);padding:10px 14px;border-top:1px solid light-dark(#e6e9e5,#3f4542)}
+#join-chat .reply-title{font-size:12px;margin-bottom:7px;color:light-dark(#515a53,#c4cec6)}
 #join-chat .options{display:grid;gap:9px}
 #join-chat .option{width:100%;display:flex;justify-content:space-between;align-items:center;gap:9px;text-align:right;background:light-dark(#fff,#303632);border:1px solid light-dark(#dce1db,#4b564c);padding:12px 14px;border-radius:10px;font-size:13px;min-height:46px}
 #join-chat .option-status{font-size:11px;color:light-dark(#637066,#b6c9ba);flex-shrink:0}
@@ -53,8 +53,6 @@
 #join-chat .tool{background:transparent;border:0;font-size:11px;min-height:38px;padding:5px 0;color:light-dark(#556258,#bdcbbf)}
 #join-chat .error{font-size:12px;color:light-dark(#a02a1d,#ffb6a9);margin-top:8px}
 #join-chat label{display:block;font-size:12px;margin-bottom:9px}
-#join-chat .upload{display:flex;gap:8px}
-#join-chat .upload button{flex:1}
 #join-chat input[type=file]{display:none}
 #join-chat button:disabled{opacity:.55}
 
@@ -63,9 +61,26 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 #join-chat { padding: 0; }
 #join-chat .device { display: flex; flex-direction: column; max-width: 460px; height: 100vh; height: 100dvh; }
 #join-chat .app-header { flex: none; }
-#join-chat .history { flex: 1; min-height: 0; overflow: auto; justify-content: flex-start; }
+#join-chat .history { flex: 1; min-height: 0; overflow: auto; }
 #join-chat .message { flex: none; font-size: 14px; }
-#join-chat .composer { flex: none; max-height: 56dvh; overflow: auto; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+#join-chat .composer { flex: none; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+#join-chat .composer input, #join-chat .composer textarea, #join-chat .composer .send { border-radius: 22px; }
+#join-chat .composer textarea { resize: none; }
+#join-chat .composer .send { background: light-dark(#963b22,#ffbc9f); color: light-dark(#fff,#34160a); }
+#join-chat .composer .send:disabled, #join-chat .composer input:disabled { background: light-dark(#eeefeb,#303632); color: light-dark(#626963,#bcc7be); opacity: 1; }
+#join-chat .composer input:disabled::placeholder { color: inherit; opacity: 1; }
+#join-chat .composer :is(input,textarea):focus { outline: 2px solid light-dark(#a4452b,#ffb698); outline-offset: -2px; }
+#join-chat .composer .error:empty { display: none; }
+#join-chat .suggestions { width: fit-content; max-width: 100%; margin: 9px auto 0 0; }
+#join-chat .suggestions .options { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+#join-chat .suggestions .option { width:auto; max-width:100%; min-height:44px; padding:8px 13px; border-radius:13px; border-color:light-dark(#dfb8a7,#875644); background:light-dark(#fff7f1,#372720); color:light-dark(#963b22,#ffc3a9); font-weight:600; line-height:1.5; }
+#join-chat .suggestions .option[data-action="final-review"] { background:light-dark(#963b22,#ffbc9f); color:light-dark(#fff,#34160a); }
+#join-chat .suggestions .option-status:empty { display:none; }
+#join-chat .suggestions .task-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+#join-chat .task-options .option { flex-wrap:wrap; justify-content:center; }
+#join-chat .task-options .option[data-action="final-review"] { grid-column:1 / -1; }
+#join-chat .suggestions .tools { gap: 4px 12px; justify-content: flex-end; }
+#join-chat .suggestions .tool { text-decoration:underline; text-underline-offset:3px; }
 #join-chat .option, #join-chat .send { font-size: 14px; }
 #join-chat .tool, #join-chat .link { min-height: 44px; font-size: 12px; }
 #join-chat .tools { gap: 8px 14px; justify-content: flex-start; }
@@ -74,9 +89,6 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 #join-chat .review-grid input { margin-top: 4px; }
 #join-chat .review-action { width: 100%; }
 #join-chat .sample { border: 1px dashed currentColor; border-radius: 8px; padding: 6px 10px; margin-top: 6px; font-size: 12px; }
-#join-chat .upload { flex-wrap: wrap; }
-#join-chat .upload .option { width: auto; }
-#join-chat .city-trigger { flex: 1; min-width: 0; }
 #join-chat .progress-trigger {
   flex: none;
   display: grid;
@@ -98,9 +110,7 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 #join-chat .progress-controls { display: grid; gap: 8px; }
 #join-chat .progress-controls label { margin: 0; }
 #join-chat .progress-controls .tools { margin: 0; }
-#join-chat .progress-field-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-#join-chat .progress-field-actions .option { padding-inline: 9px; }
-#join-chat .progress-field-actions .option-status:empty { display: none; }
+#join-chat .progress-controls > .option { justify-self: end; }
 #join-chat .sheet {
   width: min(460px, calc(100% - 24px));
   max-height: min(680px, calc(100dvh - 24px));
@@ -371,7 +381,10 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
         <span data-progress-label>پیشرفت ثبت‌نام</span><span class="sub" data-progress></span>
       </button>
     </header>
-    <div class="history" id="registration-chat-history" role="log" aria-label="پیام‌های گفت‌وگو"></div>
+    <div class="history" id="registration-chat-history">
+      <div class="transcript" role="log" aria-label="پیام‌های گفت‌وگو"></div>
+      <div class="suggestions" role="group" aria-label="پیشنهادهای پاسخ" hidden></div>
+    </div>
     <div class="composer" aria-label="پاسخ به پیام"></div>
   </section>
   <dialog class="sheet city-picker" aria-labelledby="city-picker-title">
@@ -415,6 +428,18 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
       <div class="birth-lane"><div class="birth-wheel" role="spinbutton" tabindex="0" data-part="year" aria-label="سال"></div></div>
     </div>
     <button class="send birth-confirm" type="button" data-birthdate-confirm>تأیید</button>
+  </dialog>
+  <dialog class="sheet" id="license-review" aria-labelledby="license-review-title">
+    <header class="sheet-header">
+      <div class="sheet-heading">
+        <h2 id="license-review-title">بررسی اطلاعات گواهینامه</h2>
+        <form method="dialog"><button class="tool" type="submit" autofocus>بستن</button></form>
+      </div>
+    </header>
+    <form class="sheet-body" data-license-form>
+      <div class="review-grid" data-license-fields></div>
+      <button class="send review-action" type="submit">تأیید اطلاعات</button>
+    </form>
   </dialog>
   <dialog class="sheet car-review-sheet" id="car-review" aria-labelledby="car-review-title">
     <header class="sheet-header">
@@ -464,6 +489,8 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 (() => {
 const app = document.querySelector('#join-chat');
 const history = app.querySelector('.history');
+const transcript = history.querySelector('.transcript');
+const suggestions = history.querySelector('.suggestions');
 const composer = app.querySelector('.composer');
 const progress = app.querySelector('[data-progress]');
 let progressWidgetCount = 0;
@@ -479,6 +506,8 @@ const cameraStatus = cameraView.querySelector('.camera-status');
 const cameraCapture = cameraSheet.querySelector('[data-camera-capture]');
 const cameraFallback = cameraSheet.querySelector('[data-camera-fallback]');
 const birthPicker = app.querySelector('#birthdate-picker');
+const licenseReview = app.querySelector('#license-review');
+const licenseReviewForm = licenseReview.querySelector('[data-license-form]');
 const birthWheels = [...birthPicker.querySelectorAll('.birth-wheel')];
 const carReview = app.querySelector('#car-review');
 const carReviewForm = carReview.querySelector('.car-review-form');
@@ -909,22 +938,20 @@ function addMessage(who, text, options = {}) {
     activeProgressWidget = createProgressWidget();
     bubble.append(activeProgressWidget);
   }
-  history.append(bubble);
+  transcript.append(bubble);
   scrollToLatestMessage();
 }
 
 function scrollToLatestMessage() {
-  const latest = history.lastElementChild;
-  if (latest?.classList.contains('progress-message') && latest.offsetHeight > history.clientHeight) {
-    history.scrollTop += latest.getBoundingClientRect().top - history.getBoundingClientRect().top;
-  } else history.scrollTop = history.scrollHeight;
+  history.scrollTop = history.scrollHeight;
 }
 
 function bot(text, options) {
   botQueue.push({ text, options });
   if (isBotTyping) return;
   isBotTyping = true;
-  composer.inert = true;
+  suggestions.hidden = true;
+  renderIdleComposer('کمی صبر کن…');
   history.querySelectorAll('button.editor').forEach(button => { button.disabled = true; });
   showNextBotMessage();
 }
@@ -933,7 +960,6 @@ function showNextBotMessage() {
   const message = botQueue.shift();
   if (!message) {
     isBotTyping = false;
-    composer.inert = false;
     history.querySelectorAll('button.editor').forEach(button => { button.disabled = Boolean(application); });
     render(false);
     return;
@@ -944,7 +970,7 @@ function showNextBotMessage() {
   typing.setAttribute('role', 'status');
   typing.setAttribute('aria-label', 'تپسی در حال نوشتن است');
   typing.innerHTML = '<span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>';
-  history.append(typing);
+  transcript.append(typing);
   history.scrollTop = history.scrollHeight;
 
   const delay = Math.min(950, 420 + message.text.length * 4);
@@ -1063,7 +1089,7 @@ function smallAction(label, action) {
 function controls(personal = false) {
   if (replacement) return '<div class="tools">' + smallAction('بازگشت به مرور اطلاعات', 'cancel-replacement') + '</div>';
   const extras = personal
-    ? smallAction('این سؤال بمونه برای بعد', 'skip') + smallAction('انتخاب سؤال', 'fields')
+    ? smallAction('انتخاب سؤال', 'fields')
     : '';
   const documentBack = task !== 'live' && ['upload', 'photo'].includes(mode)
     ? smallAction('بازگشت به انتخاب نوع مدرک', 'back-to-document-type') : '';
@@ -1071,8 +1097,9 @@ function controls(personal = false) {
   return '<div class="tools">' + extras + documentBack + smallAction('تغییر بخش', 'tasks') + applicationActions + '</div>';
 }
 
-function options(title, buttons) {
-  return '<div class="composer-title">' + escape(title) + '</div><div class="options">' + buttons + '</div>';
+function options(title, buttons, layout = '') {
+  return (title ? '<div class="reply-title">' + escape(title) + '</div>' : '') +
+    '<div class="options' + layout + '">' + buttons + '</div>';
 }
 
 function renderProgressControls(widget) {
@@ -1083,18 +1110,18 @@ function renderProgressControls(widget) {
   let actions = '';
   if (selected === 'personal') {
     const fieldsToOpen = fields.map(item => option(item.label, 'field:' + item.key)).join('');
-    actions = '<div class="options progress-field-actions">' + fieldsToOpen + '</div>';
+    actions = options('', fieldsToOpen);
   } else if (selected !== 'live' || !isComplete(selected)) {
     actions = option(isComplete(selected) ? 'مرور اطلاعات' : 'ادامه این بخش', 'task:' + selected);
   }
   const back = mode === 'field' ? 'بازگشت به ' + field.label : 'بازگشت به مرحله قبلی';
-  composer.innerHTML = '<div class="progress-controls"><label for="progress-section">بخش ثبت‌نام</label>' +
+  suggestions.innerHTML = '<div class="progress-controls"><label for="progress-section">بخش ثبت‌نام</label>' +
     '<select id="progress-section" aria-controls="' + widget.id + '-detail">' + sections + '</select>' +
     actions + '<div class="tools">' + smallAction(back, 'return-from-progress') + '</div></div>';
-  composer.querySelector('#progress-section').onchange = event => {
+  suggestions.querySelector('#progress-section').onchange = event => {
     widget.dataset.section = event.currentTarget.value;
     render(false);
-    composer.querySelector('#progress-section').focus({ preventScroll: true });
+    suggestions.querySelector('#progress-section').focus({ preventScroll: true });
   };
 }
 
@@ -1152,11 +1179,18 @@ cityResults.addEventListener('click', event => {
   commitAnswer(result.dataset.city);
 });
 
+function renderIdleComposer(hint = 'یکی از جواب‌ها رو انتخاب کن') {
+  composer.innerHTML = '<div class="entry"><input disabled aria-label="پاسخ به پیام" placeholder="' + escape(hint) + '">' +
+    '<button class="send" type="button" disabled>ارسال</button></div>';
+}
+
 function inputForField() {
   const value = personalDrafts[field.key] ?? answers[field.key] ?? '';
-  if (field.key === 'address') return '<textarea id="answer" rows="2" required>' + escape(value) + '</textarea>';
+  const label = escape(field.label);
+  const hint = ' placeholder="' + label + ' رو وارد کن" aria-label="' + label + '"';
+  if (field.key === 'address') return '<textarea id="answer" rows="2" required' + hint + '>' + escape(value) + '</textarea>';
   const numeric = field.key === 'identity' ? ' inputmode="numeric" maxlength="10"' : '';
-  return '<input id="answer" required' + numeric + ' value="' + escape(value) + '" autocomplete="off">';
+  return '<input id="answer" required' + hint + numeric + ' value="' + escape(value) + '" autocomplete="off">';
 }
 
 function render(persist = true) {
@@ -1170,66 +1204,68 @@ function render(persist = true) {
   if (persist) saveDraft();
   if (isBotTyping) return;
   history.querySelectorAll('.progress-widget').forEach(renderProgressWidget);
+  renderIdleComposer();
   if (showingProgress) {
     renderProgressControls(activeProgressWidget);
   } else if (mode === 'welcome-back') {
     let label = application ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
     if (applicationEditing || replacement) label = 'ادامه ویرایش ثبت‌نام';
-    composer.innerHTML = options('ثبت‌نام قبلی روی این دستگاه ذخیره شده', option(label, 'continue-draft')) +
+    suggestions.innerHTML = options('ثبت‌نام قبلی روی این دستگاه ذخیره شده', option(label, 'continue-draft')) +
       '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
   } else if (mode === 'submitted') {
-    composer.innerHTML = options('پیگیری درخواست', option('مشاهده وضعیت ثبت‌نام', 'view-status')) +
+    suggestions.innerHTML = options('پیگیری درخواست', option('مشاهده وضعیت ثبت‌نام', 'view-status')) +
       '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
   } else if (mode === 'done' && complete === 4) {
-    composer.innerHTML = options('همه بخش‌ها تکمیل شده', option(reviewAction, 'final-review')) +
+    suggestions.innerHTML = options('همه بخش‌ها تکمیل شده', option(reviewAction, 'final-review')) +
       '<div class="tools">' + smallAction('تغییر بخش', 'tasks') + '</div>';
   } else if (mode === 'tasks' || mode === 'done') {
     const taskButtons = Object.entries(tasks).map(([key, [label]]) => option(label, 'task:' + key, taskStatus(key)));
     if (complete === 4) taskButtons.unshift(option(reviewAction, 'final-review'));
-    composer.innerHTML = options('از کدوم بخش ادامه بدیم؟', taskButtons.join(''));
+    suggestions.innerHTML = options(task ? 'از کدوم بخش ادامه بدیم؟' : '', taskButtons.join(''), ' task-options');
     if (mode === 'tasks' && task && previousMode !== 'tasks') {
-      composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('برگشت به گفت‌وگو', 'resume') + '</div>');
+      suggestions.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('برگشت به گفت‌وگو', 'resume') + '</div>');
     }
-    if (task) composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>');
+    if (task) suggestions.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>');
   } else if (mode === 'field' && field.key === 'city') {
-    composer.innerHTML = '<label for="choose-city">' + field.label + '</label>' +
-      '<button id="choose-city" class="option city-trigger" type="button" aria-haspopup="dialog">جست‌وجو و انتخاب شهر</button>' + controls(true);
-    composer.querySelector('#choose-city').onclick = openCityPicker;
+    suggestions.innerHTML = options('', '<button id="choose-city" class="option" type="button" aria-haspopup="dialog">' +
+      'جست‌وجو و انتخاب شهر</button>' + option('این سؤال بمونه برای بعد', 'skip')) + controls(true);
+    suggestions.querySelector('#choose-city').onclick = openCityPicker;
   } else if (mode === 'field') {
-    composer.innerHTML = '<form><label for="answer">' + field.label + '</label><div class="entry">' +
-      inputForField() + '<button class="send" type="submit">ارسال</button></div><div class="error" role="alert"></div></form>' +
-      controls(true);
+    composer.innerHTML = '<form><div class="entry">' + inputForField() +
+      '<button class="send" type="submit">ارسال</button></div><div class="error" role="alert"></div></form>';
     composer.querySelector('form').onsubmit = submitAnswer;
+    suggestions.innerHTML = options('', option('این سؤال بمونه برای بعد', 'skip')) + controls(true);
   } else if (mode === 'fields') {
     const buttons = fields.map(item => option(item.label, 'field:' + item.key, answers[item.key] ? 'ثبت شده ✓' : ''));
-    composer.innerHTML = options('کدوم مورد رو ثبت یا ویرایش کنیم؟', buttons.join('')) + controls();
+    suggestions.innerHTML = options('کدوم مورد رو ثبت یا ویرایش کنیم؟', buttons.join('')) + controls();
   } else if (mode === 'doctype') {
     const buttons = Object.entries(documentTypes[task]).map(([key, label]) => option(label + ' دارم', 'type:' + key));
-    composer.innerHTML = options('نوع مدرک', buttons.join('')) + controls();
+    suggestions.innerHTML = options('', buttons.join('')) + controls();
   } else if (mode === 'upload') {
-    const gallery = task === 'live' ? '' : '<button class="option" type="button" data-action="gallery">گالری</button>';
+    renderIdleComposer('روش ارسال عکس رو انتخاب کن');
+    const gallery = task === 'live' ? '' : option('گالری', 'gallery');
     let photoAction = '';
-    if (task === 'live') photoAction = '<button class="option" type="button" data-action="sample">تصویر نمونه</button>';
-    else if (!photoGuideShown) photoAction = '<button class="option" type="button" data-action="photo-guide">راهنمای گرفتن عکس</button>';
-    composer.innerHTML = '<div class="composer-title">' + imageLabel() + '</div><div class="upload">' +
-      '<button class="send" type="button" data-action="camera">گرفتن عکس</button>' + gallery + photoAction + '</div>' +
+    if (task === 'live') photoAction = option('تصویر نمونه', 'sample');
+    else if (!photoGuideShown) photoAction = option('راهنمای گرفتن عکس', 'photo-guide');
+    suggestions.innerHTML = options(imageLabel(), option('گرفتن عکس', 'camera') + gallery + photoAction) +
       '<input type="file" accept="image/*" id="camera" capture="' + (task === 'live' ? 'user' : 'environment') + '">' +
       '<input type="file" accept="image/*" id="gallery">' + controls();
-    composer.querySelectorAll('input[type=file]').forEach(input => {
+    suggestions.querySelectorAll('input[type=file]').forEach(input => {
       input.onchange = () => {
         if (input.files.length) previewPhoto({ blob: input.files[0] });
       };
     });
   } else if (mode === 'photo') {
     const keep = replacement ? 'ذخیره تصویر جایگزین' : 'بله، همین تصویر';
-    composer.innerHTML = options('تصویر رو تأیید می‌کنی؟',
-      option(keep, 'keep') + option('دوباره انتخاب می‌کنم', 'retake')) + controls();
+    suggestions.innerHTML = options('', option(keep, 'keep') + option('دوباره انتخاب می‌کنم', 'retake')) + controls();
   } else if (mode === 'review') {
-    renderReview();
+    const label = task === 'car' ? 'بررسی اطلاعات خودرو' : 'بررسی اطلاعات گواهینامه';
+    suggestions.innerHTML = options('', option(label, task + '-review')) + controls();
   }
-  composer.querySelectorAll('[data-action]').forEach(button => {
+  suggestions.querySelectorAll('[data-action]').forEach(button => {
     button.onclick = () => handleAction(button.dataset.action);
   });
+  suggestions.hidden = false;
   scrollToLatestMessage();
   if (!showingProgress && openCarReviewAfterReply && task === 'car' && mode === 'review') {
     openCarReviewAfterReply = false;
@@ -1291,8 +1327,6 @@ composer.addEventListener('input', event => {
   const input = event.target;
   if (mode === 'field' && input.id === 'answer') {
     personalDrafts[field.key] = input.value;
-  } else if (mode === 'review' && task === 'license' && input.dataset.reviewField) {
-    licenseDraft[input.dataset.reviewField] = input.value;
   } else return;
   saveDraft();
 });
@@ -1406,7 +1440,7 @@ cameraSheet.addEventListener('cancel', event => {
 cameraCapture.addEventListener('click', captureCameraPhoto);
 cameraFallback.addEventListener('click', () => {
   closeCamera();
-  composer.querySelector('#camera').click();
+  suggestions.querySelector('#camera').click();
 });
 window.addEventListener('pagehide', () => { if (cameraSheet.open) closeCamera(); });
 
@@ -1553,7 +1587,7 @@ function selectBirthPart(wheel, value, align = true) {
 
 function openBirthPicker() {
   birthToday = persianDateParts(new Date());
-  const value = composer.querySelector('#birthdate-value').value;
+  const value = licenseReviewForm.querySelector('#birthdate-value').value;
   birthDraft = parseBirthdate(value) || { year: Math.max(birthYearMin, birthToday.year - 30), month: 1, day: 1 };
   birthPicker.showModal();
   birthWheels.forEach(wheel => renderBirthWheel(wheel, true));
@@ -1584,8 +1618,8 @@ birthWheels.forEach(wheel => {
 birthPicker.querySelector('[data-birthdate-confirm]').addEventListener('click', () => {
   const { year, month, day } = birthDraft;
   const value = [dateDigits(year), dateDigits(month, 2), dateDigits(day, 2)].join('/');
-  composer.querySelector('#birthdate-value').value = value;
-  composer.querySelector('[data-birthdate-display]').textContent = value;
+  licenseReviewForm.querySelector('#birthdate-value').value = value;
+  licenseReviewForm.querySelector('[data-birthdate-display]').textContent = value;
   licenseDraft[birthdateLabel] = value;
   saveDraft();
   birthPicker.close();
@@ -1728,11 +1762,7 @@ function finishReview(key, details) {
   render();
 }
 
-function renderReview() {
-  if (task === 'car') {
-    composer.innerHTML = options('بررسی اطلاعات مدرک', option('بررسی اطلاعات خودرو', 'car-review')) + controls();
-    return;
-  }
+function openLicenseReview() {
   const details = { ...(documents.license.details || sampleDetails.license), ...licenseDraft };
   const inputs = Object.entries(details).map(([label, value]) => {
     if (label === birthdateLabel) {
@@ -1743,17 +1773,27 @@ function renderReview() {
     }
     return '<label>' + escape(label) + '<input data-review-field="' + escape(label) + '" required value="' + escape(value) + '"></label>';
   });
-  composer.innerHTML = '<div class="composer-title">بررسی اطلاعات مدرک</div><form><div class="review-grid">' +
-    inputs.join('') + '</div><button class="send review-action" type="submit">تأیید اطلاعات</button></form>' + controls();
-  const birthTrigger = composer.querySelector('#birthdate-trigger');
+  licenseReviewForm.querySelector('[data-license-fields]').innerHTML = inputs.join('');
+  const birthTrigger = licenseReviewForm.querySelector('#birthdate-trigger');
   if (birthTrigger) birthTrigger.onclick = openBirthPicker;
-  composer.querySelector('form').onsubmit = event => {
+  licenseReviewForm.onsubmit = event => {
     event.preventDefault();
     const values = [...event.currentTarget.querySelectorAll('input')].map(input => input.value.trim());
     if (values.some(value => !value)) return;
-    finishReview(task, Object.fromEntries(Object.keys(details).map((label, index) => [label, values[index]])));
+    licenseReview.close();
+    finishReview('license', Object.fromEntries(Object.keys(details).map((label, index) => [label, values[index]])));
   };
+  licenseReview.showModal();
+  licenseReviewForm.scrollTop = 0;
 }
+
+licenseReviewForm.addEventListener('input', event => {
+  const label = event.target.dataset.reviewField;
+  if (label) {
+    licenseDraft[label] = event.target.value;
+    saveDraft();
+  }
+});
 
 function titles(key) {
   return tasks[key][0];
@@ -1814,7 +1854,13 @@ function handleAction(action) {
       return;
     case 'view-status': openApplicationStatus(); return;
     case 'task': chooseTask(key); break;
-    case 'field': askField(fields.find(item => item.key === key), Boolean(answers[key])); break;
+    case 'field': {
+      const item = fields.find(entry => entry.key === key);
+      const edit = Boolean(answers[key]);
+      driver(edit ? 'می‌خوام «' + item.label + '» رو ویرایش کنم.' : 'می‌خوام «' + item.label + '» رو ثبت کنم.');
+      askField(item, edit);
+      break;
+    }
     case 'type':
       if (documents[task].type && documents[task].type !== key) {
         documents[task].images = {};
@@ -1831,12 +1877,17 @@ function handleAction(action) {
       askDocumentType();
       break;
     case 'tasks':
+      driver('می‌خوام یه بخش دیگه رو انتخاب کنم.');
       previousMode = mode;
       mode = 'tasks';
       break;
     case 'resume': mode = previousMode; break;
-    case 'fields': mode = 'fields'; break;
+    case 'fields':
+      driver('می‌خوام یه سؤال دیگه رو انتخاب کنم.');
+      mode = 'fields';
+      break;
     case 'car-review': openCarReview(); return;
+    case 'license-review': openLicenseReview(); return;
     case 'skip': {
       driver('این مورد بمونه برای بعد.');
       const index = fields.indexOf(field);
@@ -1853,7 +1904,7 @@ function handleAction(action) {
       openCamera();
       return;
     case 'gallery':
-      composer.querySelector('#' + command).click();
+      suggestions.querySelector('#' + command).click();
       return;
     case 'photo-guide':
       showPhotoGuide();
@@ -1873,7 +1924,7 @@ function handleAction(action) {
 
 async function startRegistration() {
   progressTrigger.disabled = true;
-  composer.textContent = 'در حال بررسی پیش‌نویس…';
+  renderIdleComposer('در حال بررسی پیش‌نویس…');
   let restored = false;
   try {
     draftDatabase = await openDraftDatabase();
@@ -1890,6 +1941,7 @@ async function startRegistration() {
       'خوش برگشتی! می‌تونی ثبت‌نام قبلی رو ادامه بدی.');
   } else {
     bot('سلام! به ثبت‌نام رانندگان تپسی خوش اومدی. برای ثبت نام لازمه اطلاعات خودت و ماشینت رو با ما به اشتراک بگذاری. از دکمه بالا سمت چپ هم می‌تونی ببینی چه مدارکی ارسال شده و چه مدارکی هنوز مونده.');
+    bot('دوست داری از کدوم بخش شروع کنیم؟');
   }
   render(false);
 }
