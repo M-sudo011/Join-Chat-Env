@@ -681,7 +681,7 @@ function continueDraft() {
   else if (mode !== 'fields') {
     const next = Object.keys(tasks).find(key => !isComplete(key));
     if (next) chooseTask(next);
-    else mode = 'tasks';
+    else mode = 'done';
   }
 }
 
@@ -806,6 +806,7 @@ function startPhotoReplacement(key, side) {
   if (!documents[key]?.images[side]) return;
   if (finalReview.open) finalReview.close();
   if (statusSheet.open) statusSheet.close();
+  showingProgress = false;
   task = key;
   applicationEditing = Boolean(application);
   replacement = { key, side };
@@ -1179,6 +1180,9 @@ function render(persist = true) {
   } else if (mode === 'submitted') {
     composer.innerHTML = options('پیگیری درخواست', option('مشاهده وضعیت ثبت‌نام', 'view-status')) +
       '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
+  } else if (mode === 'done' && complete === 4) {
+    composer.innerHTML = options('همه بخش‌ها تکمیل شده', option(reviewAction, 'final-review')) +
+      '<div class="tools">' + smallAction('تغییر بخش', 'tasks') + '</div>';
   } else if (mode === 'tasks' || mode === 'done') {
     const taskButtons = Object.entries(tasks).map(([key, [label]]) => option(label, 'task:' + key, taskStatus(key)));
     if (complete === 4) taskButtons.unshift(option(reviewAction, 'final-review'));
@@ -1278,7 +1282,7 @@ function commitAnswer(answer) {
   const visibleValue = answered.key === 'identity' ? '••••••' + value.slice(-4) : value;
   driver(visibleValue, { edit: () => { askField(answered, true); render(); } });
   bot(editing ? 'اصلاح شد.' : 'ثبت شد.');
-  if (editing) mode = 'fields';
+  if (editing) mode = Object.keys(tasks).every(isComplete) ? 'done' : 'fields';
   else nextField();
   render();
 }
@@ -1444,7 +1448,7 @@ function acceptPhoto() {
     replacement = null;
     mode = 'done';
     driver('تصویر جایگزین رو تأیید می‌کنم.');
-    bot('تصویر جدید ذخیره شد. از مرور اطلاعات می‌تونی درخواستت رو بفرستی.');
+    bot('تصویر جدید ذخیره شد.');
     return;
   }
   driver('بله، همین تصویر.');
@@ -1713,12 +1717,14 @@ carReviewForm.addEventListener('submit', event => {
 });
 
 function finishReview(key, details) {
+  const editingDocument = Boolean(documents[key].details);
   documents[key].details = details;
   const draft = key === 'car' ? carDraft : licenseDraft;
   for (const name of Object.keys(draft)) delete draft[name];
   driver('اطلاعات مدرک رو تأیید می‌کنم.');
-  bot(titles(key) + ' ثبت شد. کدوم بخش رو ادامه بدیم؟');
   mode = 'done';
+  const message = titles(key) + (editingDocument ? ' به‌روزرسانی شد.' : ' ثبت شد.');
+  bot(Object.keys(tasks).every(isComplete) ? message : message + ' کدوم بخش رو ادامه بدیم؟');
   render();
 }
 
