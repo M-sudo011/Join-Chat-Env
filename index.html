@@ -318,7 +318,8 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
 #join-chat .car-owner { display: grid; gap: 14px; padding-top: 16px; border-top: 1px solid light-dark(#e1e6e2, #455048); }
 #join-chat .car-owner h3 { margin: 0; font-size: 14px; }
 #join-chat .car-review-footer { flex: none; padding: 10px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid light-dark(#e1e6e2, #455048); }
-#join-chat .car-review-footer .send { width: 100%; }
+#join-chat .car-review-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#join-chat .car-review-actions button { flex: 1 0 auto; width: auto; justify-content: center; }
 #join-chat .car-review-footer .error:empty { display: none; }
 #join-chat .application-body { padding-block: 14px; }
 #join-chat .application-footer { flex: none; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid light-dark(#e1e6e2, #455048); }
@@ -426,7 +427,10 @@ body { margin: 0; background: light-dark(#f2f4f1, #121513); }
     <form class="car-review-form">
       <div class="sheet-body car-review-body" data-car-fields></div>
       <footer class="car-review-footer">
-        <button class="send" type="submit">تأیید اطلاعات خودرو</button>
+        <div class="car-review-actions">
+          <button class="send" type="submit">تأیید اطلاعات خودرو</button>
+          <button class="option" type="button" data-car-review-back>بازگشت به عکس مدرک</button>
+        </div>
         <div class="error" role="alert" data-car-error></div>
       </footer>
     </form>
@@ -956,7 +960,7 @@ const persian = value => Number(value).toLocaleString('fa-IR');
 function isComplete(key) {
   if (key === 'personal') return fields.every(item => answers[item.key]);
   if (key === 'live') return Boolean(documents.live.images.face);
-  return Boolean(documents[key].details);
+  return Boolean(documents[key].details) && imageKeys(key).every(side => documents[key].images[side]);
 }
 
 function taskStatus(key) {
@@ -1669,6 +1673,18 @@ function saveCarField(event) {
   carDraft[name] = value;
   saveDraft();
 }
+
+carReview.querySelector('[data-car-review-back]').addEventListener('click', () => {
+  const side = imageKeys('car').at(-1);
+  const photo = documents.car.images[side];
+  if (!photo) return;
+  pendingPhoto = photo;
+  delete documents.car.images[side];
+  mode = 'photo';
+  carReview.close();
+  bot('این عکس «' + imageLabel('car', side) + '» رو نگه داریم یا دوباره انتخابش می‌کنی؟', { photo });
+  render();
+});
 
 carReviewForm.addEventListener('input', saveCarField);
 carReviewForm.addEventListener('change', event => {
