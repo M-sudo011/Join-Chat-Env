@@ -551,6 +551,7 @@ let mode = 'tasks';
 let previousMode = 'tasks';
 let editing = false;
 let pendingPhoto = null;
+let photoGuideShown = false;
 let application = null;
 let applicationEditing = false;
 let replacement = null;
@@ -671,7 +672,8 @@ function continueDraft() {
   showRestoredPhotos(task);
   if (mode === 'field' && field) askField(field, editing);
   else if (mode === 'photo' && pendingPhoto) previewPhoto(pendingPhoto);
-  else if (mode === 'review' || mode === 'upload' || mode === 'doctype') chooseTask(task);
+  else if (mode === 'doctype') askDocumentType();
+  else if (mode === 'review' || mode === 'upload') chooseTask(task);
   else if (mode !== 'fields') {
     const next = Object.keys(tasks).find(key => !isComplete(key));
     if (next) chooseTask(next);
@@ -1058,8 +1060,10 @@ function controls(personal = false) {
   const extras = personal
     ? smallAction('این سؤال بمونه برای بعد', 'skip') + smallAction('انتخاب سؤال', 'fields')
     : '';
+  const documentBack = task !== 'live' && ['upload', 'photo'].includes(mode)
+    ? smallAction('بازگشت به انتخاب نوع مدرک', 'back-to-document-type') : '';
   const applicationActions = applicationEditing ? smallAction('مرور تغییرات', 'final-review') + smallAction('وضعیت ثبت‌نام', 'view-status') : '';
-  return '<div class="tools">' + extras + smallAction('تغییر بخش', 'tasks') + applicationActions + '</div>';
+  return '<div class="tools">' + extras + documentBack + smallAction('تغییر بخش', 'tasks') + applicationActions + '</div>';
 }
 
 function options(title, buttons) {
@@ -1171,11 +1175,11 @@ function render(persist = true) {
   } else if (mode === 'submitted') {
     composer.innerHTML = options('پیگیری درخواست', option('مشاهده وضعیت ثبت‌نام', 'view-status')) +
       '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
-  } else if (mode === 'tasks') {
+  } else if (mode === 'tasks' || mode === 'done') {
     const taskButtons = Object.entries(tasks).map(([key, [label]]) => option(label, 'task:' + key, taskStatus(key)));
     if (complete === 4) taskButtons.unshift(option(reviewAction, 'final-review'));
     composer.innerHTML = options('از کدوم بخش ادامه بدیم؟', taskButtons.join(''));
-    if (task && previousMode !== 'tasks') {
+    if (mode === 'tasks' && task && previousMode !== 'tasks') {
       composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('برگشت به گفت‌وگو', 'resume') + '</div>');
     }
     if (task) composer.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>');
@@ -1196,9 +1200,11 @@ function render(persist = true) {
     composer.innerHTML = options('نوع مدرک', buttons.join('')) + controls();
   } else if (mode === 'upload') {
     const gallery = task === 'live' ? '' : '<button class="option" type="button" data-action="gallery">گالری</button>';
+    let photoAction = '';
+    if (task === 'live') photoAction = '<button class="option" type="button" data-action="sample">تصویر نمونه</button>';
+    else if (!photoGuideShown) photoAction = '<button class="option" type="button" data-action="photo-guide">راهنمای گرفتن عکس</button>';
     composer.innerHTML = '<div class="composer-title">' + imageLabel() + '</div><div class="upload">' +
-      '<button class="send" type="button" data-action="camera">گرفتن عکس</button>' + gallery +
-      '<button class="option" type="button" data-action="sample">تصویر نمونه</button></div>' +
+      '<button class="send" type="button" data-action="camera">گرفتن عکس</button>' + gallery + photoAction + '</div>' +
       '<input type="file" accept="image/*" id="camera" capture="' + (task === 'live' ? 'user' : 'environment') + '">' +
       '<input type="file" accept="image/*" id="gallery">' + controls();
     composer.querySelectorAll('input[type=file]').forEach(input => {
@@ -1212,10 +1218,6 @@ function render(persist = true) {
       option(keep, 'keep') + option('دوباره انتخاب می‌کنم', 'retake')) + controls();
   } else if (mode === 'review') {
     renderReview();
-  } else {
-    const next = complete === 4 ? option(reviewAction, 'final-review') + option('بازگشت به بخش‌ها', 'tasks') :
-      option('بخش بعدی رو انتخاب می‌کنم', 'tasks');
-    composer.innerHTML = options(complete === 4 ? 'همه بخش‌ها تکمیل شده' : 'ادامه ثبت‌نام', next);
   }
   composer.querySelectorAll('[data-action]').forEach(button => {
     button.onclick = () => handleAction(button.dataset.action);
@@ -1402,11 +1404,21 @@ window.addEventListener('pagehide', () => { if (cameraSheet.open) closeCamera();
 
 function askPhoto() {
   mode = 'upload';
+  photoGuideShown = false;
   if (task === 'live') {
     bot('یه عکس تازه از چهره‌ات بگیر. صورتت کامل توی کادر باشه و نور کافی داشته باشه.');
   } else {
     bot('لطفاً عکس «' + imageLabel() + '» رو بفرست. نوشته‌ها و گوشه‌های مدرک واضح باشن.');
   }
+}
+
+function showPhotoGuide() {
+  photoGuideShown = true;
+  driver('راهنمایی‌م کن چه عکسی خوبه.');
+  bot('برای «' + imageLabel() + '»، مدرک رو روی یه سطح صاف بذار. از روبه‌رو با نور کافی و بدون فلش عکس بگیر. ' +
+    'هر چهار گوشه توی کادر باشن و نوشته‌ها خوانا باشن.\n\n' +
+    'نمونه خوب: مدرک کامل توی کادره و نوشته‌ها بدون سایه و بازتاب دیده می‌شن.\n' +
+    'نمونه بد: یه گوشه از کادر بیرون افتاده یا نور روی نوشته‌ها افتاده و نمی‌شه خوندشون.');
 }
 
 function previewPhoto(photo) {
@@ -1725,6 +1737,11 @@ function titles(key) {
   return tasks[key][0];
 }
 
+function askDocumentType() {
+  mode = 'doctype';
+  bot(task === 'license' ? 'کارت گواهینامه داری یا رسیدش رو؟' : 'کارت خودرو رو داری یا برگ سبز؟');
+}
+
 function chooseTask(key) {
   if (key !== task || replacement) pendingPhoto = null;
   replacement = null;
@@ -1740,8 +1757,7 @@ function chooseTask(key) {
       mode = 'done';
     } else askPhoto();
   } else if (!documents[task].type) {
-    bot(task === 'license' ? 'کارت گواهینامه داری یا رسیدش رو؟' : 'کارت خودرو رو داری یا برگ سبز؟');
-    mode = 'doctype';
+    askDocumentType();
   } else if (nextImage()) {
     askPhoto();
   } else {
@@ -1778,9 +1794,19 @@ function handleAction(action) {
     case 'task': chooseTask(key); break;
     case 'field': askField(fields.find(item => item.key === key), Boolean(answers[key])); break;
     case 'type':
+      if (documents[task].type && documents[task].type !== key) {
+        documents[task].images = {};
+        delete documents[task].details;
+        const draft = task === 'car' ? carDraft : licenseDraft;
+        for (const name of Object.keys(draft)) delete draft[name];
+      }
       documents[task].type = key;
       driver(documentTypes[task][key] + ' دارم.');
       askPhoto();
+      break;
+    case 'back-to-document-type':
+      pendingPhoto = null;
+      askDocumentType();
       break;
     case 'tasks':
       previousMode = mode;
@@ -1807,6 +1833,9 @@ function handleAction(action) {
     case 'gallery':
       composer.querySelector('#' + command).click();
       return;
+    case 'photo-guide':
+      showPhotoGuide();
+      break;
     case 'sample':
       previewPhoto({ sample: true });
       return;
@@ -1838,8 +1867,7 @@ async function startRegistration() {
     bot(application && !applicationEditing ? 'خوش برگشتی! می‌تونی وضعیت درخواستت رو ببینی.' :
       'خوش برگشتی! می‌تونی ثبت‌نام قبلی رو ادامه بدی.');
   } else {
-    bot('سلام! به ثبت‌نام رانندگان تپسی خوش اومدی. با هم اطلاعات و مدارکت رو ثبت می‌کنیم.');
-    bot('این نسخه آزمایشیه. می‌تونی با اطلاعات و تصویر نمونه امتحانش کنی. دوست داری از کدوم بخش شروع کنیم؟');
+    bot('سلام! به ثبت‌نام رانندگان تپسی خوش اومدی. برای ثبت نام لازمه اطلاعات خودت و ماشینت رو با ما به اشتراک بگذاری. از دکمه بالا سمت چپ هم می‌تونی ببینی چه مدارکی ارسال شده و چه مدارکی هنوز مونده.');
   }
   render(false);
 }
