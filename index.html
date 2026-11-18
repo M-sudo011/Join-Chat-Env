@@ -742,12 +742,8 @@ function reviewPhotos(key) {
   }).join('') + '</div>';
 }
 
-function canReviewRegistration() {
-  return (!application || applicationEditing) && Object.keys(tasks).every(isComplete);
-}
-
 function openFinalReview() {
-  if (!canReviewRegistration() || finalReview.open) return;
+  if ((application && !applicationEditing) || !Object.keys(tasks).every(isComplete)) return;
   finalReview.querySelector('#final-review-title').textContent = application ? 'مرور تغییرات ثبت‌نام' : 'مرور نهایی ثبت‌نام';
   const personal = Object.fromEntries(fields.map(item => [item.label, answers[item.key]]));
   finalReviewBody.innerHTML = Object.keys(tasks).map(key => {
@@ -1059,10 +1055,10 @@ function smallAction(label, action) {
 }
 
 function controls() {
-  if (replacement) return '<div class="tools">' + smallAction('لغو جایگزینی', 'cancel-replacement') + '</div>';
+  if (replacement) return '<div class="tools">' + smallAction('بازگشت به مرور اطلاعات', 'cancel-replacement') + '</div>';
   const documentBack = task !== 'live' && ['upload', 'photo'].includes(mode)
     ? smallAction('بازگشت به انتخاب نوع مدرک', 'back-to-document-type') : '';
-  const applicationActions = applicationEditing ? smallAction('وضعیت ثبت‌نام', 'view-status') : '';
+  const applicationActions = applicationEditing ? smallAction('مرور تغییرات', 'final-review') + smallAction('وضعیت ثبت‌نام', 'view-status') : '';
   return '<div class="tools">' + documentBack + smallAction('تغییر بخش', 'tasks') + applicationActions + '</div>';
 }
 
@@ -1148,7 +1144,6 @@ function inputForField() {
 
 function render(persist = true) {
   const complete = Object.keys(tasks).filter(isComplete).length;
-  const canReview = canReviewRegistration();
   const reviewAction = applicationEditing ? 'مرور و ارسال مجدد' : 'مرور و ارسال';
   progress.textContent = application ? reviewLabels[application.phase] : persian(complete) + ' از ۴ بخش';
   progressTrigger.querySelector('[data-progress-label]').textContent = application ? 'وضعیت ثبت‌نام' : 'پیشرفت ثبت‌نام';
@@ -1169,12 +1164,12 @@ function render(persist = true) {
   } else if (mode === 'submitted') {
     suggestions.innerHTML = options('پیگیری درخواست', option('مشاهده وضعیت ثبت‌نام', 'view-status')) +
       '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
-  } else if (mode === 'done' && canReview) {
+  } else if (mode === 'done' && complete === 4) {
     suggestions.innerHTML = options('همه بخش‌ها تکمیل شده', option(reviewAction, 'final-review')) +
       '<div class="tools">' + smallAction('تغییر بخش', 'tasks') + '</div>';
   } else if (mode === 'tasks' || mode === 'done') {
     const taskButtons = Object.entries(tasks).map(([key, [label]]) => option(label, 'task:' + key, taskStatus(key)));
-    if (canReview) taskButtons.unshift(option(reviewAction, 'final-review'));
+    if (complete === 4) taskButtons.unshift(option(reviewAction, 'final-review'));
     suggestions.innerHTML = options(task ? 'از کدوم بخش ادامه بدیم؟' : '', taskButtons.join(''), ' task-options');
     if (mode === 'tasks' && task && previousMode !== 'tasks') {
       suggestions.insertAdjacentHTML('beforeend', '<div class="tools">' + smallAction('برگشت به گفت‌وگو', 'resume') + '</div>');
@@ -1215,12 +1210,6 @@ function render(persist = true) {
   } else if (mode === 'review') {
     const label = task === 'car' ? 'بررسی اطلاعات خودرو' : 'بررسی اطلاعات گواهینامه';
     suggestions.innerHTML = options('', option(label, task + '-review')) + controls();
-  }
-  if (canReview && !suggestions.querySelector('[data-action="final-review"]')) {
-    const review = smallAction(reviewAction, 'final-review');
-    const tools = suggestions.querySelector('.tools');
-    if (tools) tools.insertAdjacentHTML('beforeend', review);
-    else suggestions.insertAdjacentHTML('beforeend', '<div class="tools">' + review + '</div>');
   }
   suggestions.querySelectorAll('[data-action]').forEach(button => {
     button.onclick = () => handleAction(button.dataset.action);
@@ -1790,10 +1779,6 @@ function chooseTask(key) {
 }
 
 function handleAction(action) {
-  if (action === 'final-review') {
-    openFinalReview();
-    return;
-  }
   let [command, key] = action.split(':');
   if (showingProgress) {
     const isCurrentField = command === 'field' && mode === 'field' && key === field.key;
@@ -1808,6 +1793,7 @@ function handleAction(action) {
       break;
     case 'continue-draft': continueDraft(); break;
     case 'reset-draft': resetDraft(); return;
+    case 'final-review': openFinalReview(); return;
     case 'cancel-replacement':
       replacement = null;
       pendingPhoto = null;
