@@ -352,8 +352,12 @@ body { margin: 0; background: var(--surface-secondary); }
 #join-chat .review-card .tool { text-decoration: underline; }
 #join-chat .review-values { display: grid; gap: 7px; margin: 8px 0 0; font-size: 13px; }
 #join-chat .review-values div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 8px; }
+#join-chat .review-field { align-items: center; }
+#join-chat .review-field dd { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#join-chat .review-field .tool { flex-shrink: 0; }
 #join-chat .review-values dt { color: var(--content-secondary); }
 #join-chat .review-values dd { margin: 0; overflow-wrap: anywhere; }
+#join-chat .application-note:empty { display: none; }
 #join-chat .review-photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 #join-chat .review-photos figure { flex: 1 1 118px; max-width: 50%; margin: 0; min-width: 0; }
 #join-chat .review-photos img, #join-chat .review-photo-placeholder { display: grid; place-items: center; width: 100%; height: 76px; border-radius: 8px; background: var(--surface-secondary); object-fit: contain; font-size: 12px; }
@@ -402,7 +406,7 @@ body { margin: 0; background: var(--surface-secondary); }
     <div class="sheet-header">
       <div class="sheet-heading">
         <h2 id="city-picker-title">شهر محل فعالیت</h2>
-        <form method="dialog"><button class="tool" type="submit">بستن</button></form>
+        <form method="dialog"><button class="tool" type="submit" data-edit-close>بستن</button></form>
       </div>
       <input class="city-search" type="search" aria-label="جست‌وجوی شهر یا محدوده" placeholder="نام شهر یا محدوده رو جست‌وجو کن" autocomplete="off" autofocus>
     </div>
@@ -439,12 +443,13 @@ body { margin: 0; background: var(--surface-secondary); }
       <div class="birth-lane"><div class="birth-wheel" role="spinbutton" tabindex="0" data-part="year" aria-label="سال"></div></div>
     </div>
     <button class="send birth-confirm" type="button" data-birthdate-confirm>تأیید</button>
+    <button class="tool" type="button" data-birth-review-back hidden>بازگشت به مرور</button>
   </dialog>
   <dialog class="sheet" id="license-review" aria-labelledby="license-review-title">
     <header class="sheet-header">
       <div class="sheet-heading">
         <h2 id="license-review-title">بررسی اطلاعات گواهینامه</h2>
-        <form method="dialog"><button class="tool" type="submit" autofocus>بستن</button></form>
+        <form method="dialog"><button class="tool" type="submit" data-edit-close autofocus>بستن</button></form>
       </div>
     </header>
     <form class="sheet-body" data-license-form>
@@ -456,7 +461,7 @@ body { margin: 0; background: var(--surface-secondary); }
     <header class="sheet-header">
       <div class="sheet-heading">
         <h2 id="car-review-title">بررسی اطلاعات خودرو</h2>
-        <form method="dialog"><button class="tool" type="submit" autofocus>بستن</button></form>
+        <form method="dialog"><button class="tool" type="submit" data-edit-close autofocus>بستن</button></form>
       </div>
       <div class="sub">اطلاعات مدرک رو بررسی کن و موارد خالی رو کامل کن.</div>
     </header>
@@ -481,6 +486,7 @@ body { margin: 0; background: var(--surface-secondary); }
     </header>
     <div class="sheet-body application-body" data-final-review></div>
     <footer class="application-footer">
+      <p class="application-note" role="status" data-review-saved></p>
       <p class="application-note" data-review-note hidden></p>
       <button class="send" type="button" data-submit-application>ارسال برای بررسی</button>
     </footer>
@@ -525,7 +531,6 @@ const finalReview = app.querySelector('#final-review');
 const finalReviewBody = finalReview.querySelector('[data-final-review]');
 const statusSheet = app.querySelector('#application-status');
 const statusBody = statusSheet.querySelector('[data-application-status]');
-let carReviewSource;
 let openCarReviewAfterReply = false;
 const birthdateLabel = 'تاریخ تولد';
 const birthYearMin = 1300;
@@ -591,6 +596,8 @@ let photoGuideShown = false;
 let application = null;
 let applicationEditing = false;
 let replacement = null;
+let reviewEdit = null;
+let reviewSavedTimer;
 let reviewTimer;
 const demoReviewDelay = 7000;
 const reviewLabels = { reviewing: 'در حال بررسی', correction: 'نیاز به اصلاح', rechecking: 'در حال بررسی مجدد', approved: 'تأیید شد' };
@@ -651,7 +658,7 @@ function saveDraft() {
   }]));
   writeDraft({
     version: 1, task, field: field?.key, mode: mode === 'welcome-back' ? savedMode : mode, previousMode, editing,
-    application, applicationEditing, replacement,
+    application, applicationEditing, replacement, reviewEdit,
     answers, personalDrafts, licenseDraft, carDraft, documents: savedDocuments, pendingPhoto: photoData(pendingPhoto),
   }).then(() => showDraftStatus('پیش‌نویس روی دستگاه ذخیره شد'))
     .catch(() => showDraftStatus('ذخیره پیش‌نویس انجام نشد'));
@@ -678,6 +685,7 @@ function restoreDraft(draft) {
   const legacyCorrection = Boolean(draft.correctingDocument) && application?.phase === 'correction';
   applicationEditing = Boolean(application && (draft.applicationEditing || legacyCorrection));
   replacement = draft.replacement || (legacyCorrection ? { key: 'license', side: application.flagSide } : null);
+  reviewEdit = draft.reviewEdit ?? null;
   if (application && application.phase === 'correction' && !application.feedback) {
     application.feedback = [{ kind: 'photo', edited: false }];
   }
@@ -706,7 +714,10 @@ function continueDraft() {
     return;
   }
   showRestoredPhotos(task);
-  if (mode === 'field' && field) askField(field, editing);
+  if (reviewEdit && mode === 'review') {
+    if (task === 'car') openCarReview();
+    else openLicenseReview();
+  } else if (mode === 'field' && field) askField(field, editing);
   else if (mode === 'photo' && pendingPhoto) previewPhoto(pendingPhoto);
   else if (mode === 'doctype') askDocumentType();
   else if (mode === 'review' || mode === 'upload') chooseTask(task);
@@ -724,10 +735,14 @@ function newApplicationReview() {
   };
 }
 
-function reviewValues(values) {
+function reviewValues(values, editable = false) {
   return '<dl class="review-values">' + Object.entries(values).map(([label, value]) => {
     const display = /کد ملی/.test(label) ? '••••••' + value.slice(-4) : value;
-    return '<div><dt>' + escape(label) + '</dt><dd>' + escape(display) + '</dd></div>';
+    const item = editable ? fields.find(field => field.label === label) : null;
+    const edit = item ? '<button class="tool" type="button" data-edit-field="' + item.key +
+      '" aria-label="ویرایش ' + escape(label) + '">ویرایش</button>' : '';
+    return (item ? '<div class="review-field">' : '<div>') + '<dt>' + escape(label) + '</dt><dd><span>' +
+      escape(display) + '</span>' + edit + '</dd></div>';
   }).join('') + '</dl>';
 }
 
@@ -742,13 +757,14 @@ function reviewPhotos(key) {
   }).join('') + '</div>';
 }
 
-function openFinalReview() {
-  if ((application && !applicationEditing) || !Object.keys(tasks).every(isComplete)) return;
+function openFinalReview(target, saved = false) {
+  if (finalReview.open || (application && !applicationEditing) || !Object.keys(tasks).every(isComplete)) return;
   finalReview.querySelector('#final-review-title').textContent = application ? 'مرور تغییرات ثبت‌نام' : 'مرور نهایی ثبت‌نام';
   const personal = Object.fromEntries(fields.map(item => [item.label, answers[item.key]]));
   finalReviewBody.innerHTML = Object.keys(tasks).map(key => {
-    const edit = key === 'live' ? '' : '<button class="tool" type="button" data-edit-section="' + key + '">ویرایش</button>';
-    const values = key === 'personal' ? reviewValues(personal) : documents[key].details ? reviewValues(documents[key].details) : '';
+    const edit = key === 'car' || key === 'license' ? '<button class="tool" type="button" data-edit-section="' + key +
+      '" aria-label="ویرایش ' + escape(titles(key)) + '">ویرایش</button>' : '';
+    const values = key === 'personal' ? reviewValues(personal, true) : documents[key].details ? reviewValues(documents[key].details) : '';
     const photos = key === 'personal' ? '' : reviewPhotos(key);
     return '<section class="review-card"><div class="review-card-heading"><h3>' + escape(titles(key)) + '</h3>' + edit +
       '</div>' + values + photos + '</section>';
@@ -756,6 +772,15 @@ function openFinalReview() {
   syncReviewSubmit();
   finalReview.showModal();
   finalReviewBody.scrollTop = 0;
+  if (target) {
+    const item = finalReviewBody.querySelector(target);
+    item?.scrollIntoView({ block: 'center' });
+    item?.focus({ preventScroll: true });
+  }
+  clearTimeout(reviewSavedTimer);
+  const notice = finalReview.querySelector('[data-review-saved]');
+  notice.textContent = saved ? 'تغییرات ذخیره شد' : '';
+  if (saved) reviewSavedTimer = setTimeout(() => { notice.textContent = ''; }, 3000);
 }
 
 function missingCorrections() {
@@ -847,16 +872,42 @@ function startPhotoReplacement(key, side) {
   render();
 }
 
-finalReviewBody.addEventListener('click', event => {
-  const replace = event.target.closest('[data-replace-section]');
-  if (replace) {
-    startPhotoReplacement(replace.dataset.replaceSection, replace.dataset.replaceSide);
-    return;
+function returnToFinalReview(saved = false) {
+  if (!reviewEdit) return;
+  const { key, fieldKey, side } = reviewEdit;
+  const target = fieldKey ? '[data-edit-field="' + fieldKey + '"]' : side ?
+    '[data-replace-section="' + key + '"][data-replace-side="' + side + '"]' : '[data-edit-section="' + key + '"]';
+  reviewEdit = null;
+  replacement = null;
+  pendingPhoto = null;
+  mode = 'done';
+  for (const sheet of [cityPicker, birthPicker, carReview, licenseReview]) {
+    if (sheet.open) sheet.close();
   }
-  const edit = event.target.closest('[data-edit-section]');
+  if (cameraSheet.open) closeCamera();
+  render();
+  openFinalReview(target, saved);
+}
+
+finalReviewBody.addEventListener('click', event => {
+  const edit = event.target.closest('[data-edit-field], [data-edit-section], [data-replace-section]');
   if (!edit) return;
+  const { editField, editSection, replaceSection, replaceSide } = edit.dataset;
+  const key = editField ? 'personal' : editSection || replaceSection;
+  reviewEdit = { key, fieldKey: editField, side: replaceSide, draft: {} };
   finalReview.close();
-  handleAction('task:' + edit.dataset.editSection);
+  if (replaceSection) {
+    startPhotoReplacement(key, replaceSide);
+  } else if (editField) {
+    handleAction('field:' + editField);
+  } else {
+    showingProgress = false;
+    task = key;
+    mode = 'review';
+    render();
+    if (key === 'car') openCarReview();
+    else openLicenseReview();
+  }
 });
 
 finalReview.querySelector('[data-submit-application]').addEventListener('click', () => {
@@ -962,7 +1013,6 @@ function showNextBotMessage() {
   const message = botQueue.shift();
   if (!message) {
     isBotTyping = false;
-    history.querySelectorAll('button.editor').forEach(button => { button.disabled = Boolean(application); });
     render(false);
     return;
   }
@@ -1055,6 +1105,7 @@ function smallAction(label, action) {
 }
 
 function controls() {
+  if (reviewEdit) return '<div class="tools">' + smallAction('بازگشت به مرور', 'cancel-review-edit') + '</div>';
   if (replacement) return '<div class="tools">' + smallAction('بازگشت به مرور اطلاعات', 'cancel-replacement') + '</div>';
   const documentBack = task !== 'live' && ['upload', 'photo'].includes(mode)
     ? smallAction('بازگشت به انتخاب نوع مدرک', 'back-to-document-type') : '';
@@ -1103,8 +1154,10 @@ function renderCityResults() {
     const coverage = city.covered.length
       ? '<span class="city-coverage">تحت پوشش · ' + escape(city.covered.join('، ')) + '</span>'
       : '';
-    return '<button class="city-result" type="button" data-city="' + escape(city.name) + '">' +
-      escape(city.name) + coverage + '</button>';
+    const current = reviewEdit && city.name === answers.city;
+    return '<button class="city-result" type="button" data-city="' + escape(city.name) + '"' +
+      (current ? ' aria-current="true"' : '') + '>' + escape(city.name) +
+      (current ? '<span class="city-coverage">انتخاب فعلی</span>' : '') + coverage + '</button>';
   });
   if (!matches.length) rows.push('<p class="city-empty" role="status">شهری با این نام پیدا نشد. املای دیگه‌ای رو امتحان کن یا «سایر» رو انتخاب کن.</p>');
   if (!normalizeCityName(query) || !matches.length) {
@@ -1117,7 +1170,18 @@ function renderCityResults() {
 function openCityPicker() {
   citySearch.value = '';
   renderCityResults();
+  cityPicker.querySelector('[data-edit-close]').textContent = reviewEdit ? 'بازگشت به مرور' : 'بستن';
   cityPicker.showModal();
+}
+
+for (const sheet of [cityPicker, licenseReview, carReview]) {
+  const cancelReviewEdit = event => {
+    if (!reviewEdit) return;
+    event.preventDefault();
+    returnToFinalReview();
+  };
+  sheet.querySelector('[data-edit-close]').addEventListener('click', cancelReviewEdit);
+  sheet.addEventListener('cancel', cancelReviewEdit);
 }
 
 citySearch.addEventListener('input', renderCityResults);
@@ -1134,7 +1198,8 @@ function renderIdleComposer(hint = 'یکی از جواب‌ها رو انتخا�
 }
 
 function inputForField() {
-  const value = personalDrafts[field.key] ?? answers[field.key] ?? '';
+  const draft = reviewEdit?.draft ?? personalDrafts;
+  const value = draft[field.key] ?? answers[field.key] ?? '';
   const label = escape(field.label);
   const hint = ' placeholder="' + label + ' رو وارد کن" aria-label="' + label + '"';
   if (field.key === 'address') return '<textarea id="answer" rows="2" required' + hint + '>' + escape(value) + '</textarea>';
@@ -1146,19 +1211,21 @@ function render(persist = true) {
   const complete = Object.keys(tasks).filter(isComplete).length;
   const reviewAction = applicationEditing ? 'مرور و ارسال مجدد' : 'مرور و ارسال';
   progress.textContent = application ? reviewLabels[application.phase] : persian(complete) + ' از ۴ بخش';
+  progressTrigger.disabled = Boolean(reviewEdit);
   progressTrigger.querySelector('[data-progress-label]').textContent = application ? 'وضعیت ثبت‌نام' : 'پیشرفت ثبت‌نام';
   progressTrigger.setAttribute('aria-controls', application ? 'application-status' : 'registration-chat-history');
   if (application) progressTrigger.setAttribute('aria-haspopup', 'dialog');
   else progressTrigger.removeAttribute('aria-haspopup');
   if (persist) saveDraft();
   if (isBotTyping) return;
+  history.querySelectorAll('button.editor').forEach(button => { button.disabled = Boolean(application || reviewEdit); });
   history.querySelectorAll('.progress-widget').forEach(renderProgressWidget);
   renderIdleComposer();
   if (showingProgress) {
     renderProgressControls();
   } else if (mode === 'welcome-back') {
     let label = application ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
-    if (applicationEditing || replacement) label = 'ادامه ویرایش ثبت‌نام';
+    if (applicationEditing || replacement || reviewEdit) label = 'ادامه ویرایش ثبت‌نام';
     suggestions.innerHTML = options('ثبت‌نام قبلی روی این دستگاه ذخیره شده', option(label, 'continue-draft')) +
       '<div class="tools">' + smallAction('شروع دوباره', 'reset-draft') + '</div>';
   } else if (mode === 'submitted') {
@@ -1181,7 +1248,8 @@ function render(persist = true) {
     suggestions.querySelector('#choose-city').onclick = openCityPicker;
   } else if (mode === 'field') {
     composer.innerHTML = '<form><div class="entry">' + inputForField() +
-      '<button class="send" type="submit">ارسال</button></div><div class="error" role="alert"></div></form>';
+      '<button class="send" type="submit">' + (reviewEdit ? 'ذخیره تغییرات' : 'ارسال') +
+      '</button></div><div class="error" role="alert"></div></form>';
     composer.querySelector('form').onsubmit = submitAnswer;
     suggestions.innerHTML = controls();
   } else if (mode === 'fields') {
@@ -1201,7 +1269,7 @@ function render(persist = true) {
       '<input type="file" accept="image/*" id="gallery">' + controls();
     suggestions.querySelectorAll('input[type=file]').forEach(input => {
       input.onchange = () => {
-        if (input.files.length) previewPhoto({ blob: input.files[0] });
+        if (input.isConnected && mode === 'upload' && input.files.length) previewPhoto({ blob: input.files[0] });
       };
     });
   } else if (mode === 'photo') {
@@ -1267,6 +1335,10 @@ function commitAnswer(answer) {
   const visibleValue = answered.key === 'identity' ? '••••••' + value.slice(-4) : value;
   driver(visibleValue, { edit: () => { askField(answered, true); render(); } });
   bot(editing ? 'اصلاح شد.' : 'ثبت شد.');
+  if (reviewEdit) {
+    returnToFinalReview(true);
+    return;
+  }
   if (editing) mode = Object.keys(tasks).every(isComplete) ? 'done' : 'fields';
   else nextField();
   render();
@@ -1275,7 +1347,8 @@ function commitAnswer(answer) {
 composer.addEventListener('input', event => {
   const input = event.target;
   if (mode === 'field' && input.id === 'answer') {
-    personalDrafts[field.key] = input.value;
+    const draft = reviewEdit?.draft ?? personalDrafts;
+    draft[field.key] = input.value;
   } else return;
   saveDraft();
 });
@@ -1320,6 +1393,7 @@ async function openCamera() {
   else if (documents[task].type === 'card') shape = 'card';
 
   cameraView.dataset.shape = shape;
+  cameraSheet.querySelector('[data-camera-close]').textContent = reviewEdit ? 'بازگشت به مرور' : 'بستن';
   cameraSheet.querySelector('#camera-title').textContent = imageLabel();
   cameraSheet.querySelector('#camera-hint').textContent = isFace
     ? 'صورتت رو وسط قاب بگذار و به دوربین نگاه کن.'
@@ -1381,10 +1455,15 @@ function captureCameraPhoto() {
   }
 }
 
-cameraSheet.querySelector('[data-camera-close]').addEventListener('click', closeCamera);
+function cancelCamera() {
+  if (reviewEdit) returnToFinalReview();
+  else closeCamera();
+}
+
+cameraSheet.querySelector('[data-camera-close]').addEventListener('click', cancelCamera);
 cameraSheet.addEventListener('cancel', event => {
   event.preventDefault();
-  closeCamera();
+  cancelCamera();
 });
 cameraCapture.addEventListener('click', captureCameraPhoto);
 cameraFallback.addEventListener('click', () => {
@@ -1396,10 +1475,12 @@ window.addEventListener('pagehide', () => { if (cameraSheet.open) closeCamera();
 function askPhoto() {
   mode = 'upload';
   photoGuideShown = false;
+  const currentPhoto = reviewEdit && replacement ? documents[task].images[replacement.side] : null;
+  const prompt = currentPhoto ? 'این عکس فعلیه. ' : '';
   if (task === 'live') {
-    bot('یه عکس تازه از چهره‌ات بگیر. صورتت کامل توی کادر باشه و نور کافی داشته باشه.');
+    bot(prompt + 'یه عکس تازه از چهره‌ات بگیر. صورتت کامل توی کادر باشه و نور کافی داشته باشه.', { photo: currentPhoto });
   } else {
-    bot('لطفاً عکس «' + imageLabel() + '» رو بفرست. نوشته‌ها و گوشه‌های مدرک واضح باشن.');
+    bot(prompt + 'لطفاً عکس «' + imageLabel() + '» رو بفرست. نوشته‌ها و گوشه‌های مدرک واضح باشن.', { photo: currentPhoto });
   }
 }
 
@@ -1432,6 +1513,7 @@ function acceptPhoto() {
     mode = 'done';
     driver('تصویر جایگزین رو تأیید می‌کنم.');
     bot('تصویر جدید ذخیره شد.');
+    if (reviewEdit) returnToFinalReview(true);
     return;
   }
   driver('بله، همین تصویر.');
@@ -1538,9 +1620,12 @@ function openBirthPicker() {
   birthToday = persianDateParts(new Date());
   const value = licenseReviewForm.querySelector('#birthdate-value').value;
   birthDraft = parseBirthdate(value) || { year: Math.max(birthYearMin, birthToday.year - 30), month: 1, day: 1 };
+  birthPicker.querySelector('[data-birth-review-back]').hidden = !reviewEdit;
   birthPicker.showModal();
   birthWheels.forEach(wheel => renderBirthWheel(wheel, true));
 }
+
+birthPicker.querySelector('[data-birth-review-back]').addEventListener('click', () => returnToFinalReview());
 
 birthWheels.forEach(wheel => {
   wheel.addEventListener('scroll', () => {
@@ -1569,7 +1654,8 @@ birthPicker.querySelector('[data-birthdate-confirm]').addEventListener('click', 
   const value = [dateDigits(year), dateDigits(month, 2), dateDigits(day, 2)].join('/');
   licenseReviewForm.querySelector('#birthdate-value').value = value;
   licenseReviewForm.querySelector('[data-birthdate-display]').textContent = value;
-  licenseDraft[birthdateLabel] = value;
+  const draft = reviewEdit?.draft ?? licenseDraft;
+  draft[birthdateLabel] = value;
   saveDraft();
   birthPicker.close();
 });
@@ -1627,7 +1713,7 @@ function buildCarReview(details) {
     '<section class="car-owner"><h3>اطلاعات مالک</h3><label class="car-field">نام مالک<input name="owner" required value="' +
     escape(details['نام مالک'] || '') + '"></label><label class="car-field">کد ملی مالک<input name="owner-id" inputmode="numeric" required value="' +
     escape(details['کد ملی مالک'] || '') + '"></label></section></div>';
-  for (const [name, value] of Object.entries(carDraft)) {
+  for (const [name, value] of Object.entries(reviewEdit?.draft ?? carDraft)) {
     const input = carReviewForm.elements.namedItem(name);
     if (input) input.value = value;
   }
@@ -1645,10 +1731,9 @@ function syncPlateType() {
 
 function openCarReview() {
   const details = documents.car.details || sampleDetails.car;
-  if (carReviewSource !== details) {
-    buildCarReview(details);
-    carReviewSource = details;
-  }
+  buildCarReview(details);
+  carReviewForm.querySelector('[type="submit"]').textContent = reviewEdit ? 'ذخیره تغییرات' : 'تأیید اطلاعات خودرو';
+  carReview.querySelector('[data-car-review-back]').textContent = reviewEdit ? 'بازگشت به مرور' : 'بازگشت به عکس مدرک';
   carReview.querySelector('[data-car-error]').textContent = '';
   carReview.showModal();
   carReviewFields.scrollTop = 0;
@@ -1656,12 +1741,17 @@ function openCarReview() {
 
 function saveCarField(event) {
   const { name, value } = event.target;
-  if (!name || carDraft[name] === value) return;
-  carDraft[name] = value;
+  const draft = reviewEdit?.draft ?? carDraft;
+  if (!name || draft[name] === value) return;
+  draft[name] = value;
   saveDraft();
 }
 
 carReview.querySelector('[data-car-review-back]').addEventListener('click', () => {
+  if (reviewEdit) {
+    returnToFinalReview();
+    return;
+  }
   const side = imageKeys('car').at(-1);
   const photo = documents.car.images[side];
   if (!photo) return;
@@ -1708,11 +1798,14 @@ function finishReview(key, details) {
   mode = 'done';
   const message = titles(key) + (editingDocument ? ' به‌روزرسانی شد.' : ' ثبت شد.');
   bot(Object.keys(tasks).every(isComplete) ? message : message + ' کدوم بخش رو ادامه بدیم؟');
-  render();
+  if (reviewEdit) returnToFinalReview(true);
+  else render();
 }
 
 function openLicenseReview() {
-  const details = { ...(documents.license.details || sampleDetails.license), ...licenseDraft };
+  const details = { ...(documents.license.details || sampleDetails.license), ...(reviewEdit?.draft ?? licenseDraft) };
+  licenseReview.querySelector('[data-edit-close]').textContent = reviewEdit ? 'بازگشت به مرور' : 'بستن';
+  licenseReviewForm.querySelector('[type="submit"]').textContent = reviewEdit ? 'ذخیره تغییرات' : 'تأیید اطلاعات';
   const inputs = Object.entries(details).map(([label, value]) => {
     if (label === birthdateLabel) {
       return '<div><label for="birthdate-trigger">' + birthdateLabel + '</label>' +
@@ -1739,7 +1832,8 @@ function openLicenseReview() {
 licenseReviewForm.addEventListener('input', event => {
   const label = event.target.dataset.reviewField;
   if (label) {
-    licenseDraft[label] = event.target.value;
+    const draft = reviewEdit?.draft ?? licenseDraft;
+    draft[label] = event.target.value;
     saveDraft();
   }
 });
@@ -1794,6 +1888,7 @@ function handleAction(action) {
     case 'continue-draft': continueDraft(); break;
     case 'reset-draft': resetDraft(); return;
     case 'final-review': openFinalReview(); return;
+    case 'cancel-review-edit': returnToFinalReview(); return;
     case 'cancel-replacement':
       replacement = null;
       pendingPhoto = null;
