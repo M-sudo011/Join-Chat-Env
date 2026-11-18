@@ -70,6 +70,8 @@
 #join-chat .transcript{display:flex;flex-direction:column;gap:var(--space-12)}
 #join-chat .message{max-width:88%;padding:var(--space-8) var(--space-12);font-size:var(--body-medium);font-weight:var(--weight-regular);line-height:var(--line-body-medium);overflow-wrap:anywhere;white-space:pre-wrap}
 #join-chat .assistant{align-self:flex-end;background:var(--surface-secondary);border-radius:var(--radius-card) var(--radius-card) var(--radius-card) var(--space-4)}
+#join-chat .document-summary { width: 320px; white-space: normal; }
+#join-chat .document-summary .editor { margin-top: var(--space-12); }
 #join-chat .typing { display: flex; direction: ltr; align-items: center; gap: 5px; min-height: 43px; }
 #join-chat .typing span {
   width: 6px;
@@ -621,6 +623,7 @@ let application = null;
 let applicationEditing = false;
 let replacement = null;
 let reviewEdit = null;
+let chatReviewSheet = null;
 let reviewSavedTimer;
 let reviewTimer;
 const demoReviewDelay = 7000;
@@ -1003,11 +1006,16 @@ function addMessage(who, text, options = {}) {
     sample.textContent = 'تصویر نمونه';
     bubble.append(sample);
   }
+  if (options.documentDetails) {
+    bubble.classList.add('document-summary');
+    bubble.insertAdjacentHTML('beforeend', reviewValues(options.documentDetails));
+  }
   if (options.edit) {
     const edit = document.createElement('button');
     edit.className = 'editor secondary-action';
     edit.type = 'button';
     edit.textContent = 'ویرایش';
+    if (options.editLabel) edit.setAttribute('aria-label', options.editLabel);
     edit.addEventListener('click', options.edit);
     bubble.append(edit);
   }
@@ -1678,9 +1686,11 @@ birthPicker.querySelector('[data-birthdate-confirm]').addEventListener('click', 
   const value = [dateDigits(year), dateDigits(month, 2), dateDigits(day, 2)].join('/');
   licenseReviewForm.querySelector('#birthdate-value').value = value;
   licenseReviewForm.querySelector('[data-birthdate-display]').textContent = value;
-  const draft = reviewEdit?.draft ?? licenseDraft;
-  draft[birthdateLabel] = value;
-  saveDraft();
+  if (!chatReviewSheet) {
+    const draft = reviewEdit?.draft ?? licenseDraft;
+    draft[birthdateLabel] = value;
+    saveDraft();
+  }
   birthPicker.close();
 });
 
@@ -1714,7 +1724,7 @@ function buildCarReview(details) {
   const rawPlate = (details['پلاک'] || '').trim();
   const plate = latinDigits(rawPlate).match(/^(\d{2})\s*([^\d\s]+)\s*(\d{3})\s*(?:ایران\s*)?(\d{2})$/);
   const [, first, letter, serial, region] = plate || [];
-  const isNational = Boolean(plate) || !rawPlate;
+  const isNational = details['نوع پلاک'] !== 'سایر' && (Boolean(plate) || !rawPlate);
   const currentYear = persianDateParts(new Date()).year;
   const years = Array.from({ length: currentYear - 1349 }, (_, index) => dateDigits(currentYear - index));
   carReviewFields.innerHTML = '<div class="car-review-fields">' +
@@ -1737,7 +1747,8 @@ function buildCarReview(details) {
     '<section class="car-owner"><h3>اطلاعات مالک</h3><label class="car-field">نام مالک<input name="owner" required value="' +
     escape(details['نام مالک'] || '') + '"></label><label class="car-field">کد ملی مالک<input name="owner-id" inputmode="numeric" required value="' +
     escape(details['کد ملی مالک'] || '') + '"></label></section></div>';
-  for (const [name, value] of Object.entries(reviewEdit?.draft ?? carDraft)) {
+  const draft = reviewEdit?.draft ?? (chatReviewSheet ? {} : carDraft);
+  for (const [name, value] of Object.entries(draft)) {
     const input = carReviewForm.elements.namedItem(name);
     if (input) input.value = value;
   }
@@ -1756,14 +1767,16 @@ function syncPlateType() {
 function openCarReview() {
   const details = documents.car.details || sampleDetails.car;
   buildCarReview(details);
-  carReviewForm.querySelector('[type="submit"]').textContent = reviewEdit ? 'ذخیره تغییرات' : 'تأیید اطلاعات خودرو';
-  carReview.querySelector('[data-car-review-back]').textContent = reviewEdit ? 'بازگشت به مرور' : 'بازگشت به عکس مدرک';
+  carReviewForm.querySelector('[type="submit"]').textContent = reviewEdit || chatReviewSheet ? 'ذخیره تغییرات' : 'تأیید اطلاعات خودرو';
+  carReview.querySelector('[data-car-review-back]').textContent = reviewEdit ? 'بازگشت به مرور' :
+    chatReviewSheet ? 'بازگشت به گفت‌وگو' : 'بازگشت به عکس مدرک';
   carReview.querySelector('[data-car-error]').textContent = '';
   carReview.showModal();
   carReviewFields.scrollTop = 0;
 }
 
 function saveCarField(event) {
+  if (chatReviewSheet) return;
   const { name, value } = event.target;
   const draft = reviewEdit?.draft ?? carDraft;
   if (!name || draft[name] === value) return;
@@ -1774,6 +1787,10 @@ function saveCarField(event) {
 carReview.querySelector('[data-car-review-back]').addEventListener('click', () => {
   if (reviewEdit) {
     returnToFinalReview();
+    return;
+  }
+  if (chatReviewSheet) {
+    carReview.close();
     return;
   }
   const side = imageKeys('car').at(-1);
@@ -1802,7 +1819,8 @@ carReviewForm.addEventListener('submit', event => {
       'ایران', dateDigits(latinDigits(value('plate-region')))].join(' ')
     : value('plate-other');
   const details = {
-    'پلاک': plate, 'نوع خودرو': value('vehicle'), 'مدل': value('year'), 'رنگ': value('color'),
+    'پلاک': plate, 'نوع پلاک': value('plate-type') === 'national' ? 'پلاک ملی' : 'سایر',
+    'نوع خودرو': value('vehicle'), 'مدل': value('year'), 'رنگ': value('color'),
     'شماره شاسی': latinDigits(value('vin')).toUpperCase(), 'نام مالک': value('owner'), 'کد ملی مالک': value('owner-id'),
   };
   if (Object.values(details).some(item => !item)) {
@@ -1813,23 +1831,45 @@ carReviewForm.addEventListener('submit', event => {
   finishReview('car', details);
 });
 
+for (const sheet of [carReview, licenseReview]) {
+  sheet.addEventListener('close', () => {
+    if (chatReviewSheet === sheet && !sheet.open) chatReviewSheet = null;
+  });
+}
+
+function editDocumentFromChat(key) {
+  if (isBotTyping || application || reviewEdit || chatReviewSheet) return;
+  chatReviewSheet = key === 'car' ? carReview : licenseReview;
+  if (key === 'car') openCarReview();
+  else openLicenseReview();
+}
+
 function finishReview(key, details) {
   const editingDocument = Boolean(documents[key].details);
+  const editingFromChat = Boolean(chatReviewSheet);
+  chatReviewSheet = null;
   documents[key].details = details;
   const draft = key === 'car' ? carDraft : licenseDraft;
   for (const name of Object.keys(draft)) delete draft[name];
-  driver('اطلاعات مدرک رو تأیید می‌کنم.');
-  mode = 'done';
-  const message = titles(key) + (editingDocument ? ' به‌روزرسانی شد.' : ' ثبت شد.');
-  bot(Object.keys(tasks).every(isComplete) ? message : message + ' کدوم بخش رو ادامه بدیم؟');
+  driver(editingDocument ? 'تغییرات اطلاعات مدرک رو تأیید می‌کنم.' : 'اطلاعات مدرک رو تأیید می‌کنم.');
+  if (!editingFromChat) mode = 'done';
+  const title = key === 'car' ? titles(key) : 'اطلاعات گواهینامه';
+  const values = Object.fromEntries(Object.entries(details).map(([label, value]) =>
+    [label === 'شماره شاسی' ? 'شماره VIN' : label, value]));
+  bot(title + (editingDocument ? ' به‌روزرسانی شد.' : ' دریافت شد.'), {
+    documentDetails: values,
+    edit: () => editDocumentFromChat(key),
+    editLabel: 'ویرایش ' + title,
+  });
   if (reviewEdit) returnToFinalReview(true);
   else render();
 }
 
 function openLicenseReview() {
-  const details = { ...(documents.license.details || sampleDetails.license), ...(reviewEdit?.draft ?? licenseDraft) };
+  const draft = reviewEdit?.draft ?? (chatReviewSheet ? {} : licenseDraft);
+  const details = { ...(documents.license.details || sampleDetails.license), ...draft };
   licenseReview.querySelector('[data-edit-close]').textContent = reviewEdit ? 'بازگشت به مرور' : 'بستن';
-  licenseReviewForm.querySelector('[type="submit"]').textContent = reviewEdit ? 'ذخیره تغییرات' : 'تأیید اطلاعات';
+  licenseReviewForm.querySelector('[type="submit"]').textContent = reviewEdit || chatReviewSheet ? 'ذخیره تغییرات' : 'تأیید اطلاعات';
   const inputs = Object.entries(details).map(([label, value]) => {
     if (label === birthdateLabel) {
       return '<div><label for="birthdate-trigger">' + birthdateLabel + '</label>' +
@@ -1854,6 +1894,7 @@ function openLicenseReview() {
 }
 
 licenseReviewForm.addEventListener('input', event => {
+  if (chatReviewSheet) return;
   const label = event.target.dataset.reviewField;
   if (label) {
     const draft = reviewEdit?.draft ?? licenseDraft;
