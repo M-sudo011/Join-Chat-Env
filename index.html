@@ -153,10 +153,6 @@ body { margin: 0; background: var(--surface-secondary); }
 #join-chat .progress-trigger .sub { margin: 0; font-size: 10px; }
 #join-chat .progress-message { width: min(100%, 310px); max-width: 100%; white-space: normal; }
 #join-chat .progress-widget { margin-top: 6px; }
-#join-chat .progress-controls { display: grid; gap: 8px; }
-#join-chat .progress-controls label { margin: 0; }
-#join-chat .progress-controls .tools { margin: 0; }
-#join-chat .progress-controls > .option { justify-self: end; }
 #join-chat .sheet {
   width: min(460px, calc(100% - 24px));
   max-height: min(680px, calc(100dvh - 24px));
@@ -513,7 +509,6 @@ const suggestions = history.querySelector('.suggestions');
 const composer = app.querySelector('.composer');
 const progress = app.querySelector('[data-progress]');
 let progressWidgetCount = 0;
-let activeProgressWidget = null;
 let showingProgress = false;
 const cityPicker = app.querySelector('.city-picker');
 const citySearch = cityPicker.querySelector('.city-search');
@@ -948,8 +943,7 @@ function addMessage(who, text, options = {}) {
   }
   if (options.progressWidget) {
     bubble.classList.add('progress-message');
-    activeProgressWidget = createProgressWidget();
-    bubble.append(activeProgressWidget);
+    bubble.append(createProgressWidget());
   }
   transcript.append(bubble);
   scrollToLatestMessage();
@@ -1107,27 +1101,11 @@ function options(title, buttons, layout = '') {
     '<div class="options' + layout + '">' + buttons + '</div>';
 }
 
-function renderProgressControls(widget) {
-  const selected = widget.dataset.section;
-  const sections = Object.keys(tasks).map(key =>
-    '<option value="' + key + '"' + (key === selected ? ' selected' : '') + '>' + escape(titles(key)) + '</option>'
-  ).join('');
-  let actions = '';
-  if (selected === 'personal') {
-    const fieldsToOpen = fields.map(item => option(item.label, 'field:' + item.key)).join('');
-    actions = options('', fieldsToOpen);
-  } else if (selected !== 'live' || !isComplete(selected)) {
-    actions = option(isComplete(selected) ? 'مرور اطلاعات' : 'ادامه این بخش', 'task:' + selected);
-  }
+function renderProgressControls() {
+  const buttons = Object.keys(tasks).map(key => option(titles(key), 'task:' + key)).join('');
   const back = mode === 'field' ? 'بازگشت به ' + field.label : 'بازگشت به مرحله قبلی';
-  suggestions.innerHTML = '<div class="progress-controls"><label for="progress-section">بخش ثبت‌نام</label>' +
-    '<select id="progress-section" aria-controls="' + widget.id + '-detail">' + sections + '</select>' +
-    actions + '<div class="tools">' + smallAction(back, 'return-from-progress') + '</div></div>';
-  suggestions.querySelector('#progress-section').onchange = event => {
-    widget.dataset.section = event.currentTarget.value;
-    render(false);
-    suggestions.querySelector('#progress-section').focus({ preventScroll: true });
-  };
+  suggestions.innerHTML = options('', buttons, ' task-options') +
+    '<div class="tools">' + smallAction(back, 'return-from-progress') + '</div>';
 }
 
 function normalizeCityName(name) {
@@ -1211,7 +1189,7 @@ function render(persist = true) {
   history.querySelectorAll('.progress-widget').forEach(renderProgressWidget);
   renderIdleComposer();
   if (showingProgress) {
-    renderProgressControls(activeProgressWidget);
+    renderProgressControls();
   } else if (mode === 'welcome-back') {
     let label = application ? 'مشاهده وضعیت ثبت‌نام' : 'ادامه ثبت‌نام';
     if (applicationEditing || replacement) label = 'ادامه ویرایش ثبت‌نام';
