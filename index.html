@@ -183,12 +183,8 @@ body { margin: 0; background: var(--surface-secondary); }
   font-size: 12px;
   line-height: 1.55;
 }
-#join-chat .progress-card[data-selected] { border-color: var(--border-accent); background: var(--surface-accent-soft); }
 #join-chat .progress-card-title { font-weight: 600; }
 #join-chat .progress-caption { font-size: 11px; color: var(--content-secondary); }
-#join-chat .progress-detail { padding: 6px 8px; border-radius: 8px; background: var(--surface-secondary); font-size: 12px; line-height: 1.6; }
-#join-chat .progress-detail h3 { margin: 0 0 3px; font-size: inherit; }
-#join-chat .progress-detail p { margin: 2px 0; }
 #join-chat .progress-check {
   display: inline-grid;
   place-items: center;
@@ -508,7 +504,6 @@ const transcript = history.querySelector('.transcript');
 const suggestions = history.querySelector('.suggestions');
 const composer = app.querySelector('.composer');
 const progress = app.querySelector('[data-progress]');
-let progressWidgetCount = 0;
 let showingProgress = false;
 const cityPicker = app.querySelector('.city-picker');
 const citySearch = cityPicker.querySelector('.city-search');
@@ -1005,35 +1000,18 @@ function taskStatus(key) {
 
 function progressSteps(key) {
   if (key === 'personal') {
-    return fields.map(item => ({ label: item.label, filled: Boolean(answers[item.key]) }));
+    return fields.map(item => Boolean(answers[item.key]));
   }
   const { images, type, details } = documents[key];
-  if (key === 'live') return [{ label: 'عکس زنده چهره', filled: Boolean(images.face) }];
+  if (key === 'live') return [Boolean(images.face)];
 
-  const photoSteps = type
-    ? imageKeys(key).map(side => ({ label: imageLabel(key, side), filled: Boolean(images[side]) }))
-    : [{ label: 'تصویر مدرک', filled: false }];
-  return [{ label: 'انتخاب نوع مدرک', filled: Boolean(type) }, ...photoSteps,
-    { label: 'تأیید اطلاعات مدرک', filled: Boolean(details) }];
-}
-
-function missingDocumentFields(key) {
-  if ((key !== 'car' && key !== 'license') || isComplete(key) || !documents[key].type || nextImage(key)) return [];
-  const sample = sampleDetails[key];
-  if (key === 'license') return Object.entries({ ...sample, ...licenseDraft }).filter(([, value]) => !value.trim()).map(([label]) => label);
-  const carFields = { vehicle: 'نوع خودرو', year: 'مدل', color: 'رنگ', vin: 'شماره شاسی', owner: 'نام مالک', 'owner-id': 'کد ملی مالک' };
-  const missing = Object.entries(carFields).filter(([name, label]) => !(carDraft[name] ?? sample[label]).trim()).map(([, label]) => label);
-  const plate = carDraft['plate-type'] === 'other' ? ['plate-other'] : ['plate-first', 'plate-letter', 'plate-serial', 'plate-region'];
-  if (plate.some(name => Object.hasOwn(carDraft, name) && !carDraft[name].trim()) ||
-      (carDraft['plate-type'] === 'other' && !carDraft['plate-other']?.trim())) missing.unshift('پلاک');
-  return missing;
+  const photoSteps = type ? imageKeys(key).map(side => Boolean(images[side])) : [false];
+  return [Boolean(type), ...photoSteps, Boolean(details)];
 }
 
 function createProgressWidget() {
   const widget = document.createElement('section');
   widget.className = 'progress-widget';
-  widget.id = 'progress-widget-' + ++progressWidgetCount;
-  widget.dataset.section = task || Object.keys(tasks).find(key => !isComplete(key)) || 'personal';
   widget.setAttribute('aria-label', 'پیشرفت ثبت‌نام');
   renderProgressWidget(widget);
   return widget;
@@ -1041,31 +1019,19 @@ function createProgressWidget() {
 
 function renderProgressWidget(widget) {
   const keys = Object.keys(tasks);
-  const selected = widget.dataset.section;
   const complete = keys.filter(isComplete).length;
-  const detailId = widget.id + '-detail';
   const cards = keys.map(key => {
     const steps = progressSteps(key);
-    const filled = steps.filter(step => step.filled).length;
+    const filled = steps.filter(Boolean).length;
     let status = 'شروع نشده';
     if (isComplete(key)) status = 'تکمیل شده';
     else if (filled) status = persian(filled) + ' از ' + persian(steps.length) + ' مورد';
-    return '<div class="progress-card" data-section="' + key + '"' + (key === selected ? ' data-selected' : '') + '>' +
+    return '<div class="progress-card">' +
       '<span class="progress-card-title">' + escape(titles(key)) + '</span>' +
       '<span class="progress-caption">' + status + '</span></div>';
   }).join('');
-  const steps = progressSteps(selected);
-  const summary = [[true, 'ثبت شده'], [false, 'باقی مانده']].map(([filled, status]) => {
-    const labels = steps.filter(step => step.filled === filled).map(step => escape(step.label));
-    return labels.length ? '<p><strong>' + status + '</strong> · ' + labels.join('، ') + '</p>' : '';
-  }).join('');
-  const missing = missingDocumentFields(selected);
-  const remaining = missing.length ? '<p class="application-note">موارد خالی · ' + missing.map(escape).join('، ') + '</p>' : '';
   widget.innerHTML = '<div class="sub">' + persian(complete) + ' از ۴ بخش تکمیل شده</div>' +
-    '<div class="progress-map" role="group" aria-label="بخش‌های ثبت‌نام">' + cards + '</div>' +
-    '<section class="progress-detail" id="' + detailId + '" aria-labelledby="' + detailId + '-title">' +
-    '<h3 id="' + detailId + '-title">' + escape(titles(selected)) + '</h3>' +
-    summary + remaining + '</section>';
+    '<div class="progress-map" role="group" aria-label="بخش‌های ثبت‌نام">' + cards + '</div>';
 }
 
 const progressTrigger = app.querySelector('.progress-trigger');
