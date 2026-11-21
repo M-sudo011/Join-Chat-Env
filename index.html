@@ -109,7 +109,7 @@
 #join-chat .secondary-action:enabled:active {
   background: var(--border-primary);
 }
-#join-chat .editor {
+#join-chat .message-action {
   display: flex;
   align-items: center;
   gap: var(--space-8);
@@ -118,6 +118,7 @@
   background: var(--surface-accent-soft);
   color: var(--content-accent);
 }
+#join-chat .photo-guide { margin-top: var(--space-8); }
 #join-chat .older{align-self:center;border:0;background:transparent;font-size:11px;color:var(--content-secondary);padding:8px}
 #join-chat .composer{background:var(--surface-primary);padding:var(--space-8) var(--space-16);box-shadow:var(--shadow-sheet);border-top:1px solid var(--border-primary)}
 #join-chat .reply-title{font-size:12px;margin-bottom:7px;color:var(--content-secondary)}
@@ -176,13 +177,6 @@ body { margin: 0; background: var(--surface-secondary); }
   width: 18px;
   height: 18px;
   flex: none;
-}
-#join-chat .capture-guide {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  margin-block-start: var(--space-8);
-  margin-inline-start: auto;
 }
 #join-chat .header-title { min-width: 0; }
 #join-chat .progress-trigger {
@@ -709,7 +703,6 @@ let mode = 'tasks';
 let previousMode = 'tasks';
 let editing = false;
 let pendingPhoto = null;
-let photoGuideShown = false;
 let application = null;
 let applicationEditing = false;
 let replacement = null;
@@ -1108,12 +1101,25 @@ function addMessage(who, text, options = {}) {
   }
   if (options.edit) {
     const edit = document.createElement('button');
-    edit.className = 'editor secondary-action';
+    edit.className = 'editor message-action secondary-action';
     edit.type = 'button';
     edit.innerHTML = chatIcon('edit') + '<span>ویرایش</span>';
     if (options.editLabel) edit.setAttribute('aria-label', options.editLabel);
     edit.addEventListener('click', options.edit);
     bubble.append(edit);
+  }
+  if (options.photoGuide) {
+    const { key, side, label } = options.photoGuide;
+    const guide = document.createElement('button');
+    guide.className = 'photo-guide message-action secondary-action';
+    guide.type = 'button';
+    guide.innerHTML = chatIcon('help') + '<span>راهنمای گرفتن عکس</span>';
+    guide.addEventListener('click', () => {
+      if (isBotTyping) return;
+      guide.remove();
+      showPhotoGuide(key, side, label);
+    });
+    bubble.append(guide);
   }
   if (options.progressWidget) {
     bubble.classList.add('progress-message');
@@ -1133,7 +1139,7 @@ function bot(text, options) {
   isBotTyping = true;
   suggestions.hidden = true;
   renderIdleComposer('کمی صبر کن…');
-  history.querySelectorAll('button.editor').forEach(button => { button.disabled = true; });
+  history.querySelectorAll('.message-action').forEach(button => { button.disabled = true; });
   showNextBotMessage();
 }
 
@@ -1356,6 +1362,7 @@ function render(persist = true) {
   if (persist) saveDraft();
   if (isBotTyping) return;
   history.querySelectorAll('button.editor').forEach(button => { button.disabled = Boolean(application || reviewEdit); });
+  history.querySelectorAll('.photo-guide').forEach(button => { button.disabled = Boolean(application && !applicationEditing); });
   history.querySelectorAll('.progress-widget').forEach(renderProgressWidget);
   renderIdleComposer();
   if (showingProgress) {
@@ -1399,10 +1406,7 @@ function render(persist = true) {
     renderIdleComposer('روش ارسال عکس رو انتخاب کن');
     const gallery = task === 'live' ? '' : option('گالری', 'gallery');
     const sample = task === 'live' ? option('تصویر نمونه', 'sample') : '';
-    const guide = task !== 'live' && !photoGuideShown
-      ? '<button class="secondary-action capture-guide" type="button" data-action="photo-guide">' +
-        chatIcon('help') + '<span>راهنمای گرفتن عکس</span></button>' : '';
-    suggestions.innerHTML = options(imageLabel(), option('گرفتن عکس', 'camera') + gallery + sample) + guide +
+    suggestions.innerHTML = options(imageLabel(), option('گرفتن عکس', 'camera') + gallery + sample) +
       '<input type="file" accept="image/*" id="camera" capture="' + (task === 'live' ? 'user' : 'environment') + '">' +
       '<input type="file" accept="image/*" id="gallery">' + controls();
     suggestions.querySelectorAll('input[type=file]').forEach(input => {
@@ -1631,30 +1635,29 @@ window.addEventListener('pagehide', () => { if (cameraSheet.open) closeCamera();
 
 function askPhoto() {
   mode = 'upload';
-  photoGuideShown = false;
   const currentPhoto = reviewEdit && replacement ? documents[task].images[replacement.side] : null;
   const prompt = currentPhoto ? 'این عکس فعلیه. ' : '';
   const side = nextImage();
+  const label = imageLabel(task, side);
+  const photoOptions = { photo: currentPhoto, photoGuide: task !== 'live' && { key: task, side, label } };
   if (task === 'live') {
-    bot(prompt + 'یه عکس تازه از چهره‌ات بگیر. صورتت کامل توی کادر باشه و نور کافی داشته باشه.', { photo: currentPhoto });
+    bot(prompt + 'یه عکس تازه از چهره‌ات بگیر. صورتت کامل توی کادر باشه و نور کافی داشته باشه.', photoOptions);
   } else if (task === 'car' && side === 'inspection' && !replacement) {
-    bot('چون سال تولید خودرو قبل از ۱۳۹۰ه، اول تصویر معاینه فنی رو بفرست. بعدش عکس چهار طرف خودرو رو می‌گیریم. نوشته‌های برگه باید خوانا باشن.');
+    bot('چون سال تولید خودرو قبل از ۱۳۹۰ه، اول تصویر معاینه فنی رو بفرست. بعدش عکس چهار طرف خودرو رو می‌گیریم. نوشته‌های برگه باید خوانا باشن.', photoOptions);
   } else if (task === 'car' && side !== 'inspection' && Object.hasOwn(carExtraPhotos, side)) {
-    bot(prompt + 'لطفاً «' + imageLabel() + '» رو بفرست. ' + vehiclePhotoHint(side), { photo: currentPhoto });
+    bot(prompt + 'لطفاً «' + label + '» رو بفرست. ' + vehiclePhotoHint(side), photoOptions);
   } else {
-    bot(prompt + 'لطفاً عکس «' + imageLabel() + '» رو بفرست. نوشته‌ها و گوشه‌های مدرک واضح باشن.', { photo: currentPhoto });
+    bot(prompt + 'لطفاً عکس «' + label + '» رو بفرست. نوشته‌ها و گوشه‌های مدرک واضح باشن.', photoOptions);
   }
 }
 
-function showPhotoGuide() {
-  photoGuideShown = true;
+function showPhotoGuide(key, side, label) {
   driver('راهنمایی‌م کن چه عکسی خوبه.');
-  const side = nextImage();
-  if (task === 'car' && side !== 'inspection' && Object.hasOwn(carExtraPhotos, side)) {
+  if (key === 'car' && side !== 'inspection' && Object.hasOwn(carExtraPhotos, side)) {
     bot(vehiclePhotoHint(side) + ' در نور کافی و از فاصله‌ای عکس بگیر که هیچ قسمتی از خودرو بیرون کادر نمونه.');
     return;
   }
-  bot('برای «' + imageLabel() + '»، مدرک رو روی یه سطح صاف بذار. از روبه‌رو با نور کافی و بدون فلش عکس بگیر. ' +
+  bot('برای «' + label + '»، مدرک رو روی یه سطح صاف بذار. از روبه‌رو با نور کافی و بدون فلش عکس بگیر. ' +
     'هر چهار گوشه توی کادر باشن و نوشته‌ها خوانا باشن.\n\n' +
     'نمونه خوب: مدرک کامل توی کادره و نوشته‌ها بدون سایه و بازتاب دیده می‌شن.\n' +
     'نمونه بد: یه گوشه از کادر بیرون افتاده یا نور روی نوشته‌ها افتاده و نمی‌شه خوندشون.');
@@ -2155,9 +2158,6 @@ function handleAction(action) {
     case 'gallery':
       suggestions.querySelector('#' + command).click();
       return;
-    case 'photo-guide':
-      showPhotoGuide();
-      break;
     case 'sample':
       previewPhoto({ sample: true });
       return;
