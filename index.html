@@ -98,7 +98,6 @@
   max-width: 100%;
   padding: var(--space-4) var(--space-12);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-small);
   background: transparent;
   color: var(--content-secondary);
   font-size: 12px;
@@ -124,6 +123,9 @@
 #join-chat .reply-title{font-size:12px;margin-bottom:7px;color:var(--content-secondary)}
 #join-chat .options{display:grid;gap:9px}
 #join-chat .option{width:100%;display:flex;justify-content:space-between;align-items:center;gap:9px;text-align:right;background:var(--surface-raised);border:1px solid var(--border-primary);padding:var(--space-8) var(--space-16);border-radius:var(--radius-card);font-size:var(--label-small);min-height:44px}
+#join-chat :is(.secondary-action, [data-car-review-back], [data-edit-application]) {
+  border-radius: var(--radius-full);
+}
 #join-chat .option-status{font-size:11px;color:var(--content-secondary);flex-shrink:0}
 #join-chat .entry{display:flex;align-items:stretch;gap:8px}
 #join-chat input,#join-chat select,#join-chat textarea{width:100%;min-width:0;font:inherit;font-size:var(--body-medium);line-height:var(--line-body-medium);padding:var(--space-8) var(--space-12);border:1px solid var(--border-strong);background:var(--surface-secondary);color:inherit;border-radius:var(--radius-small);min-height:48px}
