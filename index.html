@@ -327,6 +327,7 @@ body { margin: 0; background: var(--surface-secondary); }
   pointer-events: none;
 }
 #join-chat .camera-view[data-shape="paper"] .camera-frame { width: 60%; width: min(77cqw, 58cqh); aspect-ratio: .707; }
+#join-chat .camera-view[data-shape="vehicle"] .camera-frame { width: 90%; width: min(90cqw, 135cqh); aspect-ratio: 1.7; }
 #join-chat .camera-view[data-shape="face"] .camera-frame { width: 64%; width: min(67cqw, 55cqh); aspect-ratio: .74; border: 2px solid #fff; border-radius: 50%; }
 #join-chat .camera-corner { position: absolute; width: 22px; height: 22px; border: solid #fff; border-width: 0; }
 #join-chat .camera-corner:nth-child(1) { top: -1px; left: -1px; border-width: 3px 0 0 3px; border-top-left-radius: 10px; }
@@ -678,6 +679,13 @@ const documentTypes = {
   license: { card: 'کارت گواهینامه', receipt: 'رسید گواهینامه' },
   car: { card: 'کارت خودرو', green: 'برگ سبز' },
 };
+const carExtraPhotos = {
+  inspection: 'تصویر معاینه فنی',
+  exteriorFront: 'تصویر جلوی خودرو',
+  exteriorBack: 'تصویر پشت خودرو',
+  exteriorPassenger: 'تصویر سمت شاگرد',
+  exteriorDriver: 'تصویر سمت راننده',
+};
 const sampleDetails = {
   license: { 'نام و نام خانوادگی': 'علی نمونه', [birthdateLabel]: '۱۳۶۹/۰۱/۰۱' },
   car: {
@@ -808,7 +816,10 @@ function restoreDraft(draft) {
 
 function showRestoredPhotos(key) {
   if (!restoredPhotoSections.delete(key)) return;
-  for (const [side, photo] of Object.entries(documents[key].images)) driver(imageLabel(key, side), { photo });
+  for (const side of imageKeys(key)) {
+    const photo = documents[key].images[side];
+    if (photo) driver(imageLabel(key, side), { photo });
+  }
 }
 
 function continueDraft() {
@@ -857,7 +868,8 @@ function reviewValues(values, editable = false) {
 }
 
 function reviewPhotos(key) {
-  return '<div class="review-photos">' + Object.entries(documents[key].images).map(([side, photo]) => {
+  return '<div class="review-photos">' + imageKeys(key).filter(side => documents[key].images[side]).map(side => {
+    const photo = documents[key].images[side];
     const label = escape(imageLabel(key, side));
     const preview = photo.url ? '<img src="' + escape(photo.url) + '" alt="' + label + '">' :
       '<div class="review-photo-placeholder">تصویر نمونه</div>';
@@ -1053,7 +1065,8 @@ statusBody.addEventListener('click', event => {
     applicationEditing = true;
     replacement = null;
     pendingPhoto = null;
-    mode = 'done';
+    if (Object.hasOwn(carExtraPhotos, nextImage('car'))) chooseTask('car');
+    else mode = 'done';
     render();
     openFinalReview();
   }
@@ -1170,8 +1183,10 @@ function progressSteps(key) {
   const { images, type, details } = documents[key];
   if (key === 'live') return [Boolean(images.face)];
 
-  const photoSteps = type ? imageKeys(key).map(side => Boolean(images[side])) : [false];
-  return [Boolean(type), ...photoSteps, Boolean(details)];
+  const photoSteps = type ? documentImageKeys(key).map(side => Boolean(images[side])) : [false];
+  const extraSteps = key === 'car' && requiresCarExtraPhotos()
+    ? Object.keys(carExtraPhotos).map(side => Boolean(images[side])) : [];
+  return [Boolean(type), ...photoSteps, Boolean(details), ...extraSteps];
 }
 
 function createProgressWidget() {
@@ -1228,7 +1243,8 @@ function smallAction(label, action) {
 function controls() {
   if (reviewEdit) return '<div class="tools">' + smallAction('بازگشت به مرور', 'cancel-review-edit') + '</div>';
   if (replacement) return '<div class="tools">' + smallAction('بازگشت به مرور اطلاعات', 'cancel-replacement') + '</div>';
-  const documentBack = task !== 'live' && ['upload', 'photo'].includes(mode)
+  const documentBack = task !== 'live' && ['upload', 'photo'].includes(mode) &&
+    !(task === 'car' && Object.hasOwn(carExtraPhotos, nextImage()))
     ? smallAction('بازگشت به انتخاب نوع مدرک', 'back-to-document-type') : '';
   const applicationActions = applicationEditing ? smallAction('مرور تغییرات', 'final-review') + smallAction('وضعیت ثبت‌نام', 'view-status') : '';
   return '<div class="tools">' + documentBack + smallAction('تغییر بخش', 'tasks') + applicationActions + '</div>';
@@ -1475,9 +1491,19 @@ composer.addEventListener('input', event => {
   saveDraft();
 });
 
-function imageKeys(key = task) {
+function requiresCarExtraPhotos() {
+  const year = Number(latinDigits(documents.car.details?.['مدل'] ?? ''));
+  return Number.isInteger(year) && year > 0 && year < 1390;
+}
+
+function documentImageKeys(key) {
   if (key === 'live') return ['face'];
   return documents[key].type === 'card' ? ['front', 'back'] : ['single'];
+}
+
+function imageKeys(key) {
+  const sides = documentImageKeys(key);
+  return key === 'car' && requiresCarExtraPhotos() ? [...sides, ...Object.keys(carExtraPhotos)] : sides;
 }
 
 function nextImage(key = task) {
@@ -1487,10 +1513,16 @@ function nextImage(key = task) {
 
 function imageLabel(key = task, side = nextImage(key)) {
   if (key === 'live') return 'عکس زنده چهره';
+  if (key === 'car' && Object.hasOwn(carExtraPhotos, side)) return carExtraPhotos[side];
   const label = documentTypes[key][documents[key].type];
   if (side === 'front') return 'روی ' + label;
   if (side === 'back') return 'پشت ' + label;
   return 'تصویر ' + label;
+}
+
+function vehiclePhotoHint(side) {
+  const plate = side === 'exteriorFront' || side === 'exteriorBack' ? ' پلاک هم باید واضح و خوانا باشه.' : '';
+  return 'کل خودرو رو از همین زاویه داخل کادر بگیر.' + plate;
 }
 
 function releaseCamera() {
@@ -1510,16 +1542,19 @@ async function openCamera() {
   if (cameraSheet.open) return;
   const session = ++cameraSession;
   const isFace = task === 'live';
+  const side = nextImage();
+  const isVehicle = task === 'car' && side !== 'inspection' && Object.hasOwn(carExtraPhotos, side);
   let shape = 'paper';
   if (isFace) shape = 'face';
-  else if (documents[task].type === 'card') shape = 'card';
+  else if (isVehicle) shape = 'vehicle';
+  else if (side !== 'inspection' && documents[task].type === 'card') shape = 'card';
 
   cameraView.dataset.shape = shape;
   cameraSheet.querySelector('[data-camera-close]').textContent = reviewEdit ? 'بازگشت به مرور' : 'بستن';
   cameraSheet.querySelector('#camera-title').textContent = imageLabel();
   cameraSheet.querySelector('#camera-hint').textContent = isFace
     ? 'صورتت رو وسط قاب بگذار و به دوربین نگاه کن.'
-    : 'همه گوشه‌های مدرک رو داخل قاب بگذار و مطمئن شو نوشته‌ها واضحن.';
+    : isVehicle ? vehiclePhotoHint(side) : 'همه گوشه‌های مدرک رو داخل قاب بگذار و مطمئن شو نوشته‌ها واضحن.';
   cameraStatus.textContent = 'در حال باز کردن دوربین…';
   cameraStatus.hidden = false;
   cameraCapture.disabled = true;
@@ -1599,8 +1634,13 @@ function askPhoto() {
   photoGuideShown = false;
   const currentPhoto = reviewEdit && replacement ? documents[task].images[replacement.side] : null;
   const prompt = currentPhoto ? 'این عکس فعلیه. ' : '';
+  const side = nextImage();
   if (task === 'live') {
     bot(prompt + 'یه عکس تازه از چهره‌ات بگیر. صورتت کامل توی کادر باشه و نور کافی داشته باشه.', { photo: currentPhoto });
+  } else if (task === 'car' && side === 'inspection' && !replacement) {
+    bot('چون سال تولید خودرو قبل از ۱۳۹۰ه، اول تصویر معاینه فنی رو بفرست. بعدش عکس چهار طرف خودرو رو می‌گیریم. نوشته‌های برگه باید خوانا باشن.');
+  } else if (task === 'car' && side !== 'inspection' && Object.hasOwn(carExtraPhotos, side)) {
+    bot(prompt + 'لطفاً «' + imageLabel() + '» رو بفرست. ' + vehiclePhotoHint(side), { photo: currentPhoto });
   } else {
     bot(prompt + 'لطفاً عکس «' + imageLabel() + '» رو بفرست. نوشته‌ها و گوشه‌های مدرک واضح باشن.', { photo: currentPhoto });
   }
@@ -1609,6 +1649,11 @@ function askPhoto() {
 function showPhotoGuide() {
   photoGuideShown = true;
   driver('راهنمایی‌م کن چه عکسی خوبه.');
+  const side = nextImage();
+  if (task === 'car' && side !== 'inspection' && Object.hasOwn(carExtraPhotos, side)) {
+    bot(vehiclePhotoHint(side) + ' در نور کافی و از فاصله‌ای عکس بگیر که هیچ قسمتی از خودرو بیرون کادر نمونه.');
+    return;
+  }
   bot('برای «' + imageLabel() + '»، مدرک رو روی یه سطح صاف بذار. از روبه‌رو با نور کافی و بدون فلش عکس بگیر. ' +
     'هر چهار گوشه توی کادر باشن و نوشته‌ها خوانا باشن.\n\n' +
     'نمونه خوب: مدرک کامل توی کادره و نوشته‌ها بدون سایه و بازتاب دیده می‌شن.\n' +
@@ -1624,7 +1669,9 @@ function previewPhoto(photo) {
 }
 
 function acceptPhoto() {
-  documents[task].images[nextImage()] = pendingPhoto;
+  const side = nextImage();
+  if (!side || !pendingPhoto) return;
+  documents[task].images[side] = pendingPhoto;
   pendingPhoto = null;
   if (replacement) {
     if (application?.phase === 'correction' && replacement.key === 'license' && replacement.side === application.flagSide) {
@@ -1643,6 +1690,9 @@ function acceptPhoto() {
     askPhoto();
   } else if (task === 'live') {
     bot('عکس چهره دریافت شد.');
+    mode = 'done';
+  } else if (task === 'car' && Object.hasOwn(carExtraPhotos, side)) {
+    bot('تصویر معاینه فنی و عکس چهار طرف خودرو دریافت شد.');
     mode = 'done';
   } else {
     bot('تصویرها دریافت شد. اطلاعات نمونه رو بررسی کن و اگه لازم بود تغییر بده.');
@@ -1883,7 +1933,7 @@ carReview.querySelector('[data-car-review-back]').addEventListener('click', () =
     carReview.close();
     return;
   }
-  const side = imageKeys('car').at(-1);
+  const side = documentImageKeys('car').at(-1);
   const photo = documents.car.images[side];
   if (!photo) return;
   pendingPhoto = photo;
@@ -1937,6 +1987,8 @@ function editDocumentFromChat(key) {
 function finishReview(key, details) {
   const editingDocument = Boolean(documents[key].details);
   const editingFromChat = Boolean(chatReviewSheet);
+  const wasExtraPhoto = task === 'car' && ['upload', 'photo'].includes(mode) &&
+    Object.hasOwn(carExtraPhotos, nextImage());
   chatReviewSheet = null;
   documents[key].details = details;
   const draft = key === 'car' ? carDraft : licenseDraft;
@@ -1951,8 +2003,22 @@ function finishReview(key, details) {
     edit: () => editDocumentFromChat(key),
     editLabel: 'ویرایش ' + title,
   });
-  if (reviewEdit) returnToFinalReview(true);
-  else render();
+  if (key === 'car' && Object.hasOwn(carExtraPhotos, nextImage('car'))) {
+    if (!editingFromChat || !wasExtraPhoto) pendingPhoto = null;
+    task = 'car';
+    showingProgress = false;
+    reviewEdit = null;
+    replacement = null;
+    if (!pendingPhoto) askPhoto();
+    render();
+  } else if (reviewEdit) returnToFinalReview(true);
+  else {
+    if (key === 'car' && wasExtraPhoto) {
+      pendingPhoto = null;
+      mode = 'done';
+    }
+    render();
+  }
 }
 
 function openLicenseReview() {
