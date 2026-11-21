@@ -660,7 +660,7 @@ function chatIcon(name) {
 }
 const fields = [
   { key: 'city', label: 'شهر فعالیت', question: 'دوست داری توی کدوم شهر فعالیت کنی؟' },
-  { key: 'identity', label: 'کد ملی', question: 'کد ملی‌ات رو می‌فرستی؟' },
+  { key: 'birthCertificate', label: 'شماره شناسنامه', question: 'شماره شناسنامه‌ات رو می‌فرستی؟' },
   { key: 'father', label: 'نام پدر', question: 'اسم پدرت رو می‌نویسی؟' },
   { key: 'address', label: 'نشانی', question: 'نشانی محل سکونتت رو می‌نویسی؟' },
 ];
@@ -783,8 +783,10 @@ function saveDraft() {
 
 function restoreDraft(draft) {
   if (draft?.version !== 1 || !Object.hasOwn(tasks, draft.task)) return false;
-  Object.assign(answers, draft.answers);
-  Object.assign(personalDrafts, draft.personalDrafts);
+  for (const { key } of fields) {
+    if (Object.hasOwn(draft.answers ?? {}, key)) answers[key] = draft.answers[key];
+    if (Object.hasOwn(draft.personalDrafts ?? {}, key)) personalDrafts[key] = draft.personalDrafts[key];
+  }
   Object.assign(licenseDraft, draft.licenseDraft);
   Object.assign(carDraft, draft.carDraft);
   for (const key of Object.keys(documents)) {
@@ -795,14 +797,18 @@ function restoreDraft(draft) {
     if (Object.keys(saved.images).length) restoredPhotoSections.add(key);
   }
   task = draft.task;
-  field = fields.find(item => item.key === draft.field) || null;
-  editing = draft.editing;
+  const resumedField = draft.field === 'identity' ? 'birthCertificate' : draft.field;
+  field = fields.find(item => item.key === resumedField) || null;
+  editing = draft.field === 'identity' ? false : draft.editing;
   application = Object.hasOwn(reviewLabels, draft.application?.phase) ? draft.application :
     (draft.submitted ? newApplicationReview() : null);
   const legacyCorrection = Boolean(draft.correctingDocument) && application?.phase === 'correction';
   applicationEditing = Boolean(application && (draft.applicationEditing || legacyCorrection));
   replacement = draft.replacement || (legacyCorrection ? { key: 'license', side: application.flagSide } : null);
   reviewEdit = draft.reviewEdit ?? null;
+  if (reviewEdit?.fieldKey === 'identity') {
+    reviewEdit = { ...reviewEdit, fieldKey: 'birthCertificate', draft: {} };
+  }
   if (application && application.phase === 'correction' && !application.feedback) {
     application.feedback = [{ kind: 'photo', edited: false }];
   }
@@ -855,10 +861,15 @@ function newApplicationReview() {
   };
 }
 
+function maskBirthCertificate(value) {
+  return '••••••' + (value.length > 4 ? value.slice(-4) : '');
+}
+
 function reviewValues(values, editable = false) {
   return '<dl class="review-values">' + Object.entries(values).map(([label, value]) => {
-    const display = /کد ملی/.test(label) ? '••••••' + value.slice(-4) : value;
     const item = editable ? fields.find(field => field.label === label) : null;
+    const display = item?.key === 'birthCertificate' ? maskBirthCertificate(value) :
+      /کد ملی/.test(label) ? '••••••' + value.slice(-4) : value;
     const edit = item ? '<button class="tool" type="button" data-edit-field="' + item.key +
       '" aria-label="ویرایش ' + escape(label) + '">ویرایش</button>' : '';
     return (item ? '<div class="review-field">' : '<div>') + '<dt>' + escape(label) + '</dt><dd><span>' +
@@ -1064,7 +1075,8 @@ statusBody.addEventListener('click', event => {
     applicationEditing = true;
     replacement = null;
     pendingPhoto = null;
-    if (Object.hasOwn(carExtraPhotos, nextImage('car'))) chooseTask('car');
+    const incomplete = Object.keys(tasks).find(key => !isComplete(key));
+    if (incomplete) chooseTask(incomplete);
     else mode = 'done';
     render();
     openFinalReview();
@@ -1353,8 +1365,7 @@ function inputForField() {
   const label = escape(field.label);
   const hint = ' placeholder="' + label + ' رو وارد کن" aria-label="' + label + '"';
   if (field.key === 'address') return '<textarea id="answer" rows="2" required' + hint + '>' + escape(value) + '</textarea>';
-  const numeric = field.key === 'identity' ? ' inputmode="numeric" maxlength="10"' : '';
-  return '<input id="answer" required' + hint + numeric + ' value="' + escape(value) + '" autocomplete="off">';
+  return '<input id="answer" required' + hint + ' value="' + escape(value) + '" autocomplete="off">';
 }
 
 function render(persist = true) {
@@ -1466,22 +1477,14 @@ function submitAnswer(event) {
 }
 
 function commitAnswer(answer) {
-  let value = answer.trim();
+  const value = answer.trim();
   if (!value) return;
-  if (field.key === 'identity') {
-    value = value.replace(/[۰-۹]/g, digit => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
-      .replace(/[٠-٩]/g, digit => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit));
-    if (!/^\d{10}$/.test(value)) {
-      composer.querySelector('.error').textContent = 'کد ملی باید ۱۰ رقم باشه.';
-      return;
-    }
-  }
   const answered = field;
   answers[answered.key] = value;
   const feedback = application?.feedback?.find(item => item.kind === answered.key);
   if (feedback && application.phase === 'correction') feedback.edited = value !== feedback.original;
   delete personalDrafts[answered.key];
-  const visibleValue = answered.key === 'identity' ? '••••••' + value.slice(-4) : value;
+  const visibleValue = answered.key === 'birthCertificate' ? maskBirthCertificate(value) : value;
   driver(visibleValue, { edit: () => { askField(answered, true); render(); } });
   bot(editing ? 'اصلاح شد.' : 'ثبت شد.');
   if (reviewEdit) {
